@@ -26,18 +26,30 @@ export function PortalSidebar() {
       <div className="p-4 border-b border-sidebar-border">
         {!collapsed ? (
           <div className="flex items-center gap-3">
-            <img src="/favicon.png" alt="" className="h-10 w-10 rounded-lg object-contain" />
+            <img
+              src="/favicon.png"
+              alt=""
+              className="h-10 w-10 rounded-lg object-contain"
+            />
             <div className="min-w-0">
-              <h1 className="text-sm font-bold text-sidebar-accent-foreground tracking-tight truncate">Lexora</h1>
-              <p className="text-[10px] text-sidebar-foreground/60 truncate">Board Portal</p>
+              <h1 className="text-sm font-bold text-sidebar-accent-foreground tracking-tight truncate">
+                Lexora
+              </h1>
+              <p className="text-[10px] text-sidebar-foreground/60 truncate">
+                Board Portal
+              </p>
             </div>
           </div>
         ) : (
-          <img src="/lexora-logo.png" alt="Lexora" className="mx-auto h-12 w-12 rounded-lg object-contain" />
+          <img
+            src="/lexora-logo.png"
+            alt="Lexora"
+            className="mx-auto h-12 w-12 rounded-lg object-contain"
+          />
         )}
       </div>
 
-      <SidebarContent className="pt-2">
+      <SidebarContent className="pt-2 sidebar-scroll">
         {NAV_GROUPS.map((group) => (
           <SidebarGroup key={group.label}>
             {!collapsed && <SidebarGroupLabel>{group.label}</SidebarGroupLabel>}
@@ -54,7 +66,9 @@ export function PortalSidebar() {
                           activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium"
                         >
                           <item.icon className="mr-2 h-4 w-4" />
-                          {!collapsed && <span className="flex-1">{item.title}</span>}
+                          {!collapsed && (
+                            <span className="flex-1">{item.title}</span>
+                          )}
                           {!collapsed && count > 0 && (
                             <span className="ml-auto rounded-full bg-destructive px-1.5 py-px text-[10px] font-bold leading-4 text-destructive-foreground">
                               {count}
@@ -83,7 +97,9 @@ export function PortalSidebar() {
                 <p className="truncate text-xs font-semibold text-sidebar-accent-foreground">
                   {user.firstName} {user.lastName}
                 </p>
-                <p className="truncate text-[11px] text-sidebar-foreground/60">{user.role}</p>
+                <p className="truncate text-[11px] text-sidebar-foreground/60">
+                  {user.role}
+                </p>
               </div>
             </li>
           )}

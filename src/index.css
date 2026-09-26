@@ -120,20 +120,52 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: 'Work Sans', system-ui, sans-serif;
+    font-family: "Work Sans", system-ui, sans-serif;
   }
 }
 
 @layer utilities {
+  /* Slim scrollbar that stays invisible until the sidebar is hovered. */
+  .sidebar-scroll {
+    scrollbar-width: thin; /* Firefox */
+    scrollbar-color: transparent transparent;
+  }
+  .sidebar-scroll:hover {
+    scrollbar-color: hsl(var(--sidebar-foreground) / 0.25) transparent;
+  }
+  .sidebar-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+  .sidebar-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .sidebar-scroll::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 9999px;
+  }
+  .sidebar-scroll:hover::-webkit-scrollbar-thumb {
+    background: hsl(var(--sidebar-foreground) / 0.25);
+  }
+  .sidebar-scroll::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--sidebar-foreground) / 0.45);
+  }
+
   .font-display {
-    font-family: 'Instrument Serif', Georgia, serif;
+    font-family: "Instrument Serif", Georgia, serif;
     letter-spacing: 0;
   }
 
   .intro-grid {
     background-image:
-      linear-gradient(hsl(var(--intro-foreground) / 0.045) 1px, transparent 1px),
-      linear-gradient(90deg, hsl(var(--intro-foreground) / 0.045) 1px, transparent 1px);
+      linear-gradient(
+        hsl(var(--intro-foreground) / 0.045) 1px,
+        transparent 1px
+      ),
+      linear-gradient(
+        90deg,
+        hsl(var(--intro-foreground) / 0.045) 1px,
+        transparent 1px
+      );
     background-size: 72px 72px;
   }
 
@@ -147,12 +179,20 @@
 }
 
 @keyframes intro-reveal {
-  from { opacity: 0; transform: translateY(18px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .intro-reveal { animation: none; }
+  .intro-reveal {
+    animation: none;
+  }
 }
 
 @layer components {
