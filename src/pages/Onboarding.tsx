@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import {
@@ -7,14 +8,13 @@ import {
   Ban,
   Check,
   CheckCircle2,
-  Download,
   FileText,
   Handshake,
   Lock,
   LockKeyhole,
-  RotateCcw,
   ShieldCheck,
   Circle,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,42 +23,26 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import {
-  ONBOARDING_START_STEP,
+  fetchMyOnboarding,
+  fetchMyProfile,
+  submitFitProper,
+  submitDocumentsCoi,
+  submitOnboardingTraining,
+  submitInduction,
+  type AppointmentDocumentId,
+  type Directorship,
+  type TrainingModuleId,
+} from "@/lib/board-api";
+import {
   ONBOARDING_STEP_COUNT,
-  STEP1_COMPLETED_ON,
-  appointmentRecord,
-  coiDefaults,
   coiQuestions,
   inductionItems,
   onboardingSteps,
   portalFeatures,
-  regulatoryDefaults,
   regulatoryQuestions,
   signDocuments,
   trainingModules,
-  type Directorship,
 } from "@/data/onboardingMockData";
-
-/* ───────── progress persistence (dummy, browser-only) ───────── */
-
-const STORAGE_KEY = "lexora-board-onboarding";
-interface Progress {
-  current: number; // 1..7 (7 = every step complete)
-  completedOn: Record<number, string>;
-}
-const initialProgress = (): Progress => ({
-  current: ONBOARDING_START_STEP,
-  completedOn: { 1: STEP1_COMPLETED_ON },
-});
-function loadProgress(): Progress {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as Progress;
-  } catch {
-    /* ignore */
-  }
-  return initialProgress();
-}
 
 /* ───────── small building blocks ───────── */
 
@@ -261,12 +245,14 @@ function PanelHead({
 function ActionButton({
   done,
   current,
+  pending,
   onClick,
   children,
   disabledHint,
 }: {
   done: boolean;
   current: boolean;
+  pending?: boolean;
   onClick: () => void;
   children: React.ReactNode;
   disabledHint: string;
@@ -277,10 +263,10 @@ function ActionButton({
       <Button
         type="button"
         onClick={onClick}
-        disabled={!current}
+        disabled={!current || pending}
         className="mt-5 h-11 w-full rounded-lg font-semibold"
       >
-        {children}
+        {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : children}
       </Button>
       <p className="mt-2 text-center text-[11px] text-muted-foreground">
         {disabledHint}
@@ -321,91 +307,128 @@ function ToggleDoneButton({
 const docIcons = { charter: BookOpen, conduct: Handshake, nda: Lock };
 const modIcons = { shield: ShieldCheck, lock: LockKeyhole, ban: Ban };
 
+const emptyAnswers = (ids: string[]) =>
+  Object.fromEntries(
+    ids.map((id) => [id, { yes: false, detail: "" }]),
+  ) as Record<string, { yes: boolean; detail: string }>;
+
 /* ───────── page ───────── */
 
 export default function Onboarding() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  const [progress, setProgress] = useState<Progress>(loadProgress);
-  const [viewing, setViewing] = useState<number>(() =>
-    Math.min(loadProgress().current, ONBOARDING_STEP_COUNT),
-  );
-  const { current, completedOn } = progress;
+  const { data, isLoading } = useQuery({
+    queryKey: ["my-onboarding"],
+    queryFn: fetchMyOnboarding,
+  });
+  const { data: profile } = useQuery({
+    queryKey: ["my-profile"],
+    queryFn: fetchMyProfile,
+  });
 
+  const stageOrder: Array<keyof NonNullable<typeof data>["stages"]> = [
+    "accept",
+    "fitProper",
+    "documentsCoi",
+    "training",
+    "induction",
+  ];
+  const allStagesDone = data
+    ? stageOrder.every((s) => data.stages[s].done)
+    : false;
+  // 1-based, matches onboardingSteps' numbering (1..5 are the real
+  // steps; 6 is "Active", reachable only once every real step is done).
+  const current = !data
+    ? 1
+    : allStagesDone
+      ? ONBOARDING_STEP_COUNT + 1
+      : stageOrder.findIndex((s) => !data.stages[s].done) + 1;
+
+  const [viewing, setViewing] = useState<number>(1);
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
-    } catch {
-      /* ignore */
-    }
-  }, [progress]);
+    if (data) setViewing(Math.min(current, ONBOARDING_STEP_COUNT));
+    // Only re-center the viewer the first time real data arrives —
+    // afterward the director is free to click between tabs themselves.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!data]);
 
   // Step 2 – regulatory
   const [fullName, setFullName] = useState(
     user ? `${user.firstName} ${user.lastName}` : "",
   );
-  const [dob, setDob] = useState(regulatoryDefaults.dob);
-  const [idNumber, setIdNumber] = useState(regulatoryDefaults.idNumber);
-  const [nationality, setNationality] = useState(
-    regulatoryDefaults.nationality,
+  const [dob, setDob] = useState("");
+  const [idNumber, setIdNumber] = useState("");
+  const [nationality, setNationality] = useState("");
+  const [address, setAddress] = useState("");
+  const [pastDirs, setPastDirs] = useState<Directorship[]>([
+    { company: "", position: "", detail: "" },
+  ]);
+  const [regAnswers, setRegAnswers] = useState(
+    emptyAnswers(regulatoryQuestions.map((q) => q.id)),
   );
-  const [address, setAddress] = useState(regulatoryDefaults.address);
-  const [pastDirs, setPastDirs] = useState<Directorship[]>(
-    regulatoryDefaults.directorships,
-  );
-  const [regAnswers, setRegAnswers] = useState<
-    Record<string, { yes: boolean; detail: string }>
-  >(
-    Object.fromEntries(
-      regulatoryQuestions.map((q) => [q.id, { yes: false, detail: "" }]),
-    ),
-  );
-  const [reference, setReference] = useState(regulatoryDefaults.reference);
+  const [reference, setReference] = useState({
+    name: "",
+    relationship: "",
+    email: "",
+  });
   const [regDeclared, setRegDeclared] = useState(false);
 
-  // Step 3 – documents & COI
-  const [signed, setSigned] = useState<string[]>([]);
-  const [holdsDirs, setHoldsDirs] = useState(true);
-  const [currentDirs, setCurrentDirs] = useState<Directorship[]>(
-    coiDefaults.directorships,
-  );
-  const [coiAnswers, setCoiAnswers] = useState<
-    Record<string, { yes: boolean; detail: string }>
-  >(
-    Object.fromEntries(
-      coiQuestions.map((q) => [q.id, { yes: false, detail: "" }]),
-    ),
-  );
-  const [coiDeclared, setCoiDeclared] = useState(false);
+  useEffect(() => {
+    const sub = data?.stages.fitProper.submission;
+    if (!sub) return;
+    setFullName(sub.fullName);
+    setDob(sub.dob?.slice(0, 10) ?? "");
+    setIdNumber(sub.idNumber);
+    setNationality(sub.nationality);
+    setAddress(sub.address);
+    if (sub.directorships.length) setPastDirs(sub.directorships);
+    setRegAnswers((a) => {
+      const next = { ...a };
+      for (const ans of sub.answers)
+        next[ans.questionId] = { yes: ans.yes, detail: ans.detail };
+      return next;
+    });
+    setReference({
+      name: sub.referenceName,
+      relationship: sub.referenceRelationship,
+      email: sub.referenceEmail,
+    });
+    setRegDeclared(true);
+  }, [data?.stages.fitProper.submission]);
 
-  // Step 4 – training
-  const [trained, setTrained] = useState<string[]>([]);
-
-  // Step 5 – induction
-  const [inductionDate, setInductionDate] = useState("");
-  const [indDeclared, setIndDeclared] = useState(false);
-
-  const kindOf = (n: number): "done" | "current" | "locked" =>
-    n < current ? "done" : n === current ? "current" : "locked";
-
-  const advance = (n: number, message: string) => {
-    if (n !== current) return;
-    const today = format(new Date(), "d MMM yyyy");
-    // Step 5 is the last action: portal activation (step 6) happens automatically with it.
-    const lastAction = n === ONBOARDING_STEP_COUNT - 1;
-    setProgress((p) => ({
-      current: lastAction ? ONBOARDING_STEP_COUNT + 1 : p.current + 1,
-      completedOn: {
-        ...p.completedOn,
-        [n]: today,
-        ...(lastAction ? { [ONBOARDING_STEP_COUNT]: today } : {}),
-      },
-    }));
-    setViewing(n + 1);
-    toast.success(message);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
+  const fitProperMutation = useMutation({
+    mutationFn: () =>
+      submitFitProper({
+        fullName,
+        dob,
+        idNumber,
+        nationality,
+        address,
+        directorships: pastDirs.filter((d) => d.company.trim()),
+        answers: regulatoryQuestions.map((q) => ({
+          questionId: q.id,
+          yes: regAnswers[q.id].yes,
+          detail: regAnswers[q.id].detail,
+        })),
+        referenceName: reference.name || undefined,
+        referenceRelationship: reference.relationship || undefined,
+        referenceEmail: reference.email || undefined,
+      }),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["my-onboarding"], updated);
+      setViewing(3);
+      toast.success(
+        "Fit & Proper declaration submitted to the Company Secretary.",
+      );
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    },
+    onError: (err: any) =>
+      toast.error(
+        err?.response?.data?.message ?? "Could not submit — please try again.",
+      ),
+  });
 
   const submitRegulatory = () => {
     if (![fullName, dob, idNumber, nationality, address].every((v) => v.trim()))
@@ -418,8 +441,63 @@ export default function Onboarding() {
       return toast.error("Please give details for each 'Yes' answer.");
     if (!regDeclared)
       return toast.error("Please tick the declaration before submitting.");
-    advance(2, "Fit & Proper declaration submitted to the Company Secretary.");
+    fitProperMutation.mutate();
   };
+
+  // Step 3 – documents & COI
+  const [signed, setSigned] = useState<AppointmentDocumentId[]>([]);
+  const [holdsDirs, setHoldsDirs] = useState(true);
+  const [currentDirs, setCurrentDirs] = useState<Directorship[]>([
+    { company: "", position: "", detail: "" },
+  ]);
+  const [coiAnswers, setCoiAnswers] = useState(
+    emptyAnswers(coiQuestions.map((q) => q.id)),
+  );
+  const [coiDeclared, setCoiDeclared] = useState(false);
+
+  useEffect(() => {
+    const sub = data?.stages.documentsCoi.submission;
+    if (!sub) return;
+    setSigned(sub.signedDocumentIds);
+    setHoldsDirs(sub.holdsOtherDirectorships);
+    if (sub.currentDirectorships.length)
+      setCurrentDirs(sub.currentDirectorships);
+    setCoiAnswers((a) => {
+      const next = { ...a };
+      for (const ans of sub.answers)
+        next[ans.questionId] = { yes: ans.yes, detail: ans.detail };
+      return next;
+    });
+    setCoiDeclared(true);
+  }, [data?.stages.documentsCoi.submission]);
+
+  const documentsCoiMutation = useMutation({
+    mutationFn: () =>
+      submitDocumentsCoi({
+        signedDocumentIds: signed,
+        holdsOtherDirectorships: holdsDirs,
+        currentDirectorships: holdsDirs
+          ? currentDirs.filter((d) => d.company.trim())
+          : [],
+        answers: coiQuestions.map((q) => ({
+          questionId: q.id,
+          yes: coiAnswers[q.id].yes,
+          detail: coiAnswers[q.id].detail,
+        })),
+      }),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["my-onboarding"], updated);
+      setViewing(4);
+      toast.success(
+        "Documents and Conflict of Interest declaration submitted.",
+      );
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    },
+    onError: (err: any) =>
+      toast.error(
+        err?.response?.data?.message ?? "Could not submit — please try again.",
+      ),
+  });
 
   const submitDocuments = () => {
     if (signed.length < signDocuments.length)
@@ -434,35 +512,81 @@ export default function Onboarding() {
       return toast.error("Please give details for each 'Yes' answer.");
     if (!coiDeclared)
       return toast.error("Please tick the declaration before submitting.");
-    advance(3, "Documents and Conflict of Interest declaration submitted.");
+    documentsCoiMutation.mutate();
   };
+
+  // Step 4 – training
+  const [trained, setTrained] = useState<TrainingModuleId[]>([]);
+  useEffect(() => {
+    if (data?.stages.training.completedModuleIds.length) {
+      setTrained(data.stages.training.completedModuleIds);
+    }
+  }, [data?.stages.training.completedModuleIds]);
+
+  const trainingMutation = useMutation({
+    mutationFn: () => submitOnboardingTraining(trained),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["my-onboarding"], updated);
+      setViewing(5);
+      toast.success("Mandatory training complete.");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    },
+    onError: (err: any) =>
+      toast.error(
+        err?.response?.data?.message ?? "Could not submit — please try again.",
+      ),
+  });
 
   const submitTraining = () => {
     if (trained.length < trainingModules.length)
       return toast.error("All 3 modules must be marked complete first.");
-    advance(4, "Mandatory training complete.");
+    trainingMutation.mutate();
   };
 
-  const submitInduction = () => {
+  // Step 5 – induction
+  const [inductionDate, setInductionDate] = useState("");
+  const [indDeclared, setIndDeclared] = useState(false);
+  useEffect(() => {
+    const ack = data?.stages.induction.acknowledgement;
+    if (!ack) return;
+    setInductionDate(ack.scheduledDate ?? "");
+    setIndDeclared(true);
+  }, [data?.stages.induction.acknowledgement]);
+
+  const inductionMutation = useMutation({
+    mutationFn: () =>
+      submitInduction({ scheduledDate: inductionDate || undefined }),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["my-onboarding"], updated);
+      setViewing(6);
+      toast.success("Induction confirmed. Your portal access is now active.");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    },
+    onError: (err: any) =>
+      toast.error(
+        err?.response?.data?.message ?? "Could not submit — please try again.",
+      ),
+  });
+
+  const submitInductionForm = () => {
     if (!indDeclared)
       return toast.error("Please acknowledge receipt of the induction pack.");
-    advance(5, "Induction confirmed. Your portal access is now active.");
+    inductionMutation.mutate();
   };
 
-  const resetDemo = () => {
-    setProgress(initialProgress());
-    setViewing(ONBOARDING_START_STEP);
-    setSigned([]);
-    setTrained([]);
-    setRegDeclared(false);
-    setCoiDeclared(false);
-    setIndDeclared(false);
-    setInductionDate("");
-    toast("Onboarding demo reset.");
-  };
+  if (isLoading || !data) {
+    return (
+      <div className="flex items-center justify-center py-24 gap-2 text-muted-foreground">
+        <Loader2 className="h-5 w-5 animate-spin" />
+        <span className="text-sm">Loading your onboarding…</span>
+      </div>
+    );
+  }
 
-  const allDone = current > ONBOARDING_STEP_COUNT;
-  const hint = allDone
+  const kindOf = (n: number): "done" | "current" | "locked" =>
+    n < current ? "done" : n === current ? "current" : "locked";
+
+  const hint = allStagesDone
     ? "All steps complete. Click any step to review it."
     : `Steps 1–${current - 1} complete. Step ${current} is your current step. Click any step to review it, or ahead to preview locked steps.`;
 
@@ -473,8 +597,7 @@ export default function Onboarding() {
     if (k === "done")
       return (
         <StatusBanner kind="done">
-          <CheckCircle2 className="h-4 w-4" /> Completed{" "}
-          {completedOn[n] ?? completedOn[n - 1]}
+          <CheckCircle2 className="h-4 w-4" /> Completed
         </StatusBanner>
       );
     if (k === "current")
@@ -500,22 +623,12 @@ export default function Onboarding() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">My Onboarding</h1>
-          <p className="text-sm text-muted-foreground">
-            Click any step to review it. Complete the current step's action to
-            move on to the next one.
-          </p>
-        </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={resetDemo}
-          className="text-xs text-muted-foreground"
-        >
-          <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Reset demo
-        </Button>
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">My Onboarding</h1>
+        <p className="text-sm text-muted-foreground">
+          Click any step to review it. Complete the current step's action to
+          move on to the next one.
+        </p>
       </div>
 
       {/* Stepper — every step is a clickable tab */}
@@ -580,27 +693,18 @@ export default function Onboarding() {
             />
             <Row label="Appointment letter">
               <Badge className="bg-success/10 text-success hover:bg-success/10">
-                ✓ Accepted
+                ✓ Signed &amp; countersigned
               </Badge>
             </Row>
-            {appointmentRecord.map((r) => (
-              <Row key={r.label} label={r.label}>
-                {r.value}
-              </Row>
-            ))}
-            <Row label="Consent to Act as Director">
-              <Badge className="bg-success/10 text-success hover:bg-success/10">
-                ✓ Signed, {STEP1_COMPLETED_ON}
-              </Badge>
-            </Row>
-            <div className="mt-3">
-              <Button
-                variant="outline"
-                onClick={() => toast("Demo only: no file to download yet.")}
-              >
-                <Download className="mr-1.5 h-4 w-4" /> Download signed consent
-              </Button>
-            </div>
+            {profile && (
+              <>
+                <Row label="Role">{profile.role}</Row>
+                <Row label="Term">
+                  {format(new Date(profile.appointedAt), "d MMM yyyy")} –{" "}
+                  {format(new Date(profile.termEnds), "d MMM yyyy")}
+                </Row>
+              </>
+            )}
           </div>
         </section>
       )}
@@ -727,6 +831,7 @@ export default function Onboarding() {
             <ActionButton
               done={kindOf(2) === "done"}
               current={kindOf(2) === "current"}
+              pending={fitProperMutation.isPending}
               onClick={submitRegulatory}
               disabledHint={
                 kindOf(2) === "locked"
@@ -756,7 +861,7 @@ export default function Onboarding() {
               </h3>
               {signDocuments.map((d) => {
                 const Icon = docIcons[d.icon as keyof typeof docIcons];
-                const isSigned = signed.includes(d.id) || kindOf(3) === "done";
+                const isSigned = signed.includes(d.id as AppointmentDocumentId);
                 return (
                   <div
                     key={d.id}
@@ -775,7 +880,9 @@ export default function Onboarding() {
                       done={isSigned}
                       label="Sign now"
                       doneLabel="Signed"
-                      onClick={() => setSigned((s) => [...s, d.id])}
+                      onClick={() =>
+                        setSigned((s) => [...s, d.id as AppointmentDocumentId])
+                      }
                     />
                   </div>
                 );
@@ -860,6 +967,7 @@ export default function Onboarding() {
             <ActionButton
               done={kindOf(3) === "done"}
               current={kindOf(3) === "current"}
+              pending={documentsCoiMutation.isPending}
               onClick={submitDocuments}
               disabledHint={
                 kindOf(3) === "locked"
@@ -886,7 +994,7 @@ export default function Onboarding() {
             <fieldset disabled={readOnly(4)} className="contents">
               {trainingModules.map((m) => {
                 const Icon = modIcons[m.icon as keyof typeof modIcons];
-                const isDone = trained.includes(m.id) || kindOf(4) === "done";
+                const isDone = trained.includes(m.id as TrainingModuleId);
                 return (
                   <div
                     key={m.id}
@@ -905,7 +1013,9 @@ export default function Onboarding() {
                       done={isDone}
                       label="Start module"
                       doneLabel="Complete"
-                      onClick={() => setTrained((t) => [...t, m.id])}
+                      onClick={() =>
+                        setTrained((t) => [...t, m.id as TrainingModuleId])
+                      }
                     />
                   </div>
                 );
@@ -914,6 +1024,7 @@ export default function Onboarding() {
             <ActionButton
               done={kindOf(4) === "done"}
               current={kindOf(4) === "current"}
+              pending={trainingMutation.isPending}
               onClick={submitTraining}
               disabledHint={
                 kindOf(4) === "locked"
@@ -970,7 +1081,8 @@ export default function Onboarding() {
             <ActionButton
               done={kindOf(5) === "done"}
               current={kindOf(5) === "current"}
-              onClick={submitInduction}
+              pending={inductionMutation.isPending}
+              onClick={submitInductionForm}
               disabledHint={
                 kindOf(5) === "locked"
                   ? lockedNote(5)
