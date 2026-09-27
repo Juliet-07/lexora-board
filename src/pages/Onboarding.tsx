@@ -4,12 +4,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import {
-  BookOpen,
   Ban,
   Check,
   CheckCircle2,
   FileText,
-  Handshake,
   Lock,
   LockKeyhole,
   ShieldCheck,
@@ -29,18 +27,16 @@ import {
   submitDocumentsCoi,
   submitOnboardingTraining,
   submitInduction,
-  type AppointmentDocumentId,
+  resolveBoardFileUrl,
   type Directorship,
   type TrainingModuleId,
 } from "@/lib/board-api";
 import {
   ONBOARDING_STEP_COUNT,
   coiQuestions,
-  inductionItems,
   onboardingSteps,
   portalFeatures,
   regulatoryQuestions,
-  signDocuments,
   trainingModules,
 } from "@/data/onboardingMockData";
 
@@ -304,7 +300,6 @@ function ToggleDoneButton({
   );
 }
 
-const docIcons = { charter: BookOpen, conduct: Handshake, nda: Lock };
 const modIcons = { shield: ShieldCheck, lock: LockKeyhole, ban: Ban };
 
 const emptyAnswers = (ids: string[]) =>
@@ -398,6 +393,22 @@ export default function Onboarding() {
     setRegDeclared(true);
   }, [data?.stages.fitProper.submission]);
 
+  // ID number and nationality are part of what the tenant already
+  // captured when they created this director (same as the name, which
+  // comes prefilled from `user` above) — prefill them from the
+  // tenant's own record rather than asking the director to retype
+  // information already on file. Only applies once, before there's a
+  // real Fit & Proper submission of the director's own to prefill
+  // from instead (the effect above takes priority when it fires), and
+  // only fills fields still blank — so it never clobbers something
+  // the director already typed, and leaves them blank if the tenant
+  // genuinely didn't fill them in at creation time.
+  useEffect(() => {
+    if (!profile || data?.stages.fitProper.submission) return;
+    if (profile.idNumber) setIdNumber((v) => v || profile.idNumber);
+    if (profile.nationality) setNationality((v) => v || profile.nationality);
+  }, [profile, data?.stages.fitProper.submission]);
+
   const fitProperMutation = useMutation({
     mutationFn: () =>
       submitFitProper({
@@ -444,8 +455,12 @@ export default function Onboarding() {
     fitProperMutation.mutate();
   };
 
-  // Step 3 – documents & COI
-  const [signed, setSigned] = useState<AppointmentDocumentId[]>([]);
+  // Step 3 – documents & COI. Real documents the tenant set up for
+  // this director to sign (Board Charter, Code of Conduct, etc.) —
+  // empty when the tenant hasn't configured any yet, in which case
+  // there's simply nothing required here.
+  const signDocuments = data?.stages.documentsCoi.documents ?? [];
+  const [signed, setSigned] = useState<string[]>([]);
   const [holdsDirs, setHoldsDirs] = useState(true);
   const [currentDirs, setCurrentDirs] = useState<Directorship[]>([
     { company: "", position: "", detail: "" },
@@ -501,7 +516,7 @@ export default function Onboarding() {
 
   const submitDocuments = () => {
     if (signed.length < signDocuments.length)
-      return toast.error("All 3 documents must be signed first.");
+      return toast.error("All documents must be signed first.");
     if (holdsDirs && !currentDirs.some((d) => d.company.trim()))
       return toast.error("Please list your current directorships.");
     if (
@@ -859,30 +874,47 @@ export default function Onboarding() {
               <h3 className="mb-2 text-[13px] font-bold">
                 Sign the following documents
               </h3>
+              {signDocuments.length === 0 && (
+                <p className="mb-4 text-[12.5px] text-muted-foreground">
+                  Nothing to sign here yet — your Company Secretary hasn't set
+                  up any documents for you. You can continue to the declaration
+                  below.
+                </p>
+              )}
               {signDocuments.map((d) => {
-                const Icon = docIcons[d.icon as keyof typeof docIcons];
-                const isSigned = signed.includes(d.id as AppointmentDocumentId);
+                const isSigned = signed.includes(d._id);
                 return (
                   <div
-                    key={d.id}
+                    key={d._id}
                     className="mb-2 flex items-center gap-3 rounded-lg border p-3"
                   >
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-                      <Icon className="h-4 w-4" />
+                      <FileText className="h-4 w-4" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <b className="block text-[13px]">{d.title}</b>
                       <div className="text-[11px] text-muted-foreground">
-                        {d.meta}
+                        {d.category}
+                        {d.fileUrl && (
+                          <>
+                            {" · "}
+                            <a
+                              href={resolveBoardFileUrl(d.fileUrl)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-primary underline"
+                            >
+                              View document
+                            </a>
+                          </>
+                        )}
                       </div>
                     </div>
                     <ToggleDoneButton
                       done={isSigned}
                       label="Sign now"
                       doneLabel="Signed"
-                      onClick={() =>
-                        setSigned((s) => [...s, d.id as AppointmentDocumentId])
-                      }
+                      onClick={() => setSigned((s) => [...s, d._id])}
                     />
                   </div>
                 );
@@ -1052,12 +1084,31 @@ export default function Onboarding() {
               <p className="mb-2 text-[12.5px] text-muted-foreground">
                 Review the induction pack below, then acknowledge receipt.
               </p>
-              {inductionItems.map((item) => (
+              {(data?.stages.induction.pack ?? []).length === 0 && (
+                <p className="py-1.5 text-[12.5px] text-muted-foreground">
+                  Your Company Secretary hasn't sent any induction documents
+                  yet. You can still acknowledge below once you've been briefed,
+                  or check back here later.
+                </p>
+              )}
+              {(data?.stages.induction.pack ?? []).map((item) => (
                 <div
-                  key={item}
-                  className="flex items-center gap-2 py-1.5 text-[12.5px] text-muted-foreground"
+                  key={item._id}
+                  className="flex items-center gap-2 py-1.5 text-[12.5px]"
                 >
-                  <FileText className="h-3.5 w-3.5 shrink-0" /> {item}
+                  <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  {item.fileUrl ? (
+                    <a
+                      href={resolveBoardFileUrl(item.fileUrl)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-primary underline"
+                    >
+                      {item.name}
+                    </a>
+                  ) : (
+                    <span className="text-muted-foreground">{item.name}</span>
+                  )}
                 </div>
               ))}
               <div className="mt-4">

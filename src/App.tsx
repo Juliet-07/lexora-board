@@ -13,6 +13,7 @@ import { PortalLayout } from "@/components/layout/PortalLayout";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import Onboarding from "@/pages/Onboarding";
+import GovernanceCodeApprovals from "@/pages/GovernanceCodeApprovals";
 import ComingSoon from "@/pages/ComingSoon";
 import SignContractPage from "@/pages/SignContractPage";
 import { NAV_GROUPS } from "@/components/layout/nav";
@@ -34,7 +35,7 @@ function GuestOnly({ children }: { children: React.ReactNode }) {
 }
 
 // Pages that have a real screen; everything else still renders the placeholder.
-const BUILT_ROUTES = ["/dashboard", "/onboarding"];
+const BUILT_ROUTES = ["/dashboard", "/onboarding", "/governance-codes"];
 const placeholderRoutes = NAV_GROUPS.flatMap((g) => g.items).filter(
   (i) => !BUILT_ROUTES.includes(i.url),
 );
@@ -71,6 +72,10 @@ const App = () => (
             >
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/onboarding" element={<Onboarding />} />
+              <Route
+                path="/governance-codes"
+                element={<GovernanceCodeApprovals />}
+              />
               {placeholderRoutes.map((i) => (
                 <Route
                   key={i.url}

@@ -2,6 +2,16 @@ import { api } from "./api";
 
 const unwrap = (res: any) => res.data?.data ?? res.data;
 
+// Documents/induction-pack files come back as backend-relative paths
+// (e.g. "/uploads/grc/board-members/documents/xyz.pdf") — resolve to
+// an absolute URL the same way lexora-tenant's resolveGrcFileUrl does.
+const API_BASE = (api.defaults as any)?.baseURL ?? "/api";
+export const resolveBoardFileUrl = (url: string): string => {
+  if (!url) return url;
+  if (url.startsWith("http")) return url;
+  return `${new URL(API_BASE).origin}${url}`;
+};
+
 // ══════════════════════════════════════════════════════════════
 // Auth
 // ══════════════════════════════════════════════════════════════
@@ -91,12 +101,38 @@ export interface FitProperSubmission {
   submittedAt: string;
 }
 
+// signedDocumentIds now holds the _id of each BoardMember.documentsToSign
+// entry the tenant set up for this director (see SignableDocument
+// below) rather than the old fixed 'charter'/'conduct'/'nda' literals
+// — a director with none configured simply has nothing to sign here.
 export interface DocumentsCoiSubmission {
-  signedDocumentIds: AppointmentDocumentId[];
+  signedDocumentIds: string[];
   holdsOtherDirectorships: boolean;
   currentDirectorships: Directorship[];
   answers: YesNoAnswer[];
   submittedAt: string;
+}
+
+// A document the tenant set up for this director to sign (Board
+// Charter, Code of Conduct, etc.) — a snapshot of one of the tenant's
+// published Governance Codes, taken when they assigned it.
+export interface SignableDocument {
+  _id: string;
+  title: string;
+  category: string;
+  sourceCodeId: string | null;
+  fileUrl: string | null;
+  version: number;
+}
+
+// A real file in the induction pack the tenant has sent so far.
+export interface InductionPackFile {
+  _id: string;
+  name: string;
+  fileUrl: string | null;
+  mimeType: string | null;
+  size: number;
+  uploadedBy: string;
 }
 
 export interface MyOnboarding {
@@ -109,7 +145,11 @@ export interface MyOnboarding {
   stages: {
     accept: { done: boolean };
     fitProper: { done: boolean; submission: FitProperSubmission | null };
-    documentsCoi: { done: boolean; submission: DocumentsCoiSubmission | null };
+    documentsCoi: {
+      done: boolean;
+      submission: DocumentsCoiSubmission | null;
+      documents: SignableDocument[];
+    };
     training: { done: boolean; completedModuleIds: TrainingModuleId[] };
     induction: {
       done: boolean;
@@ -117,6 +157,7 @@ export interface MyOnboarding {
         scheduledDate: string | null;
         acknowledgedAt: string;
       } | null;
+      pack: InductionPackFile[];
     };
   };
 }
@@ -129,6 +170,10 @@ export const fetchMyProfile = async (): Promise<{
   appointedAt: string;
   termEnds: string;
   lifecycleStatus: BoardMemberLifecycleStatus;
+  // Tenant-provided at director-creation time — used to prefill Step 2
+  // of onboarding unless the tenant left them blank.
+  nationality: string;
+  idNumber: string;
 }> => {
   const res = await api.get("/board-portal/me");
   return unwrap(res);
@@ -161,7 +206,7 @@ export const submitFitProper = async (dto: {
 };
 
 export const submitDocumentsCoi = async (dto: {
-  signedDocumentIds: AppointmentDocumentId[];
+  signedDocumentIds: string[];
   holdsOtherDirectorships: boolean;
   currentDirectorships: Directorship[];
   answers: YesNoAnswer[];
@@ -183,5 +228,46 @@ export const submitInduction = async (dto: {
   scheduledDate?: string;
 }): Promise<MyOnboarding> => {
   const res = await api.post("/board-portal/onboarding/induction", dto);
+  return unwrap(res);
+};
+
+// ══════════════════════════════════════════════════════════════
+// Governance Codes — codes this director has been asked to
+// approve (Board Charter, Code of Conduct, etc.), decided in-app
+// rather than via an emailed link since a board member is already
+// an authenticated portal user.
+// ══════════════════════════════════════════════════════════════
+
+export type CodeApprovalDecision = "Pending" | "Approved" | "Rejected";
+
+export interface PendingGovernanceCode {
+  id: string;
+  title: string;
+  category: string;
+  version: number;
+  status: string;
+  body: string;
+  myDecision: CodeApprovalDecision | null;
+  myNotes: string;
+  myDecidedAt: string | null;
+}
+
+export const fetchPendingGovernanceCodes = async (): Promise<
+  PendingGovernanceCode[]
+> => {
+  const res = await api.get("/board-portal/governance-codes");
+  const d = unwrap(res);
+  return Array.isArray(d) ? d : [];
+};
+
+export const decideGovernanceCode = async (
+  id: string,
+  decision: "Approved" | "Rejected",
+  notes?: string,
+): Promise<{ status: string }> => {
+  const res = await api.post(`/board-portal/governance-codes/${id}/decide`, {
+    decision,
+    notes,
+  });
   return unwrap(res);
 };
