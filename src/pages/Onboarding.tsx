@@ -4,14 +4,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import {
-  Ban,
   Check,
   CheckCircle2,
   FileText,
-  Lock,
-  LockKeyhole,
-  ShieldCheck,
+  GraduationCap,
   Circle,
+  Lock,
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -29,16 +27,59 @@ import {
   submitInduction,
   resolveBoardFileUrl,
   type Directorship,
-  type TrainingModuleId,
 } from "@/lib/board-api";
-import {
-  ONBOARDING_STEP_COUNT,
-  coiQuestions,
-  onboardingSteps,
-  portalFeatures,
-  regulatoryQuestions,
-  trainingModules,
-} from "@/data/onboardingMockData";
+
+/* ───────── static UI copy (not onboarding data — step labels and the
+   two fixed, server-validated question sets, mirroring
+   REGULATORY_QUESTION_IDS/COI_QUESTION_IDS on the backend so a
+   submission's ids always line up with what the form showed) ───────── */
+
+const ONBOARDING_STEP_COUNT = 6;
+
+interface OnboardingStepMeta {
+  n: number;
+  label: string;
+  title: string;
+}
+
+const onboardingSteps: OnboardingStepMeta[] = [
+  { n: 1, label: "Accept", title: "Accept appointment & sign consent to act" },
+  { n: 2, label: "Regulatory", title: "Regulatory Fit & Proper declaration" },
+  { n: 3, label: "Documents", title: "Documents & declarations" },
+  { n: 4, label: "Training", title: "Mandatory training" },
+  { n: 5, label: "Induction", title: "Induction pack" },
+  { n: 6, label: "Active", title: "Portal access activation" },
+];
+
+const regulatoryQuestions = [
+  {
+    id: "sanction",
+    text: "Have you ever been subject to any regulatory sanction or disciplinary action?",
+  },
+  {
+    id: "bankrupt",
+    text: "Have you ever been declared bankrupt or been party to a company insolvency/liquidation?",
+  },
+  { id: "convictions", text: "Do you have any unspent criminal convictions?" },
+];
+
+const coiQuestions = [
+  {
+    id: "interest",
+    text: "Do you, or a close family member, have any financial interest in transactions involving Lexora Africa?",
+  },
+  {
+    id: "related",
+    text: "Are you related to, or do you have a close personal relationship with, any other director or senior manager?",
+  },
+];
+
+const portalFeatures = [
+  "Meeting packs & board calendar",
+  "E-signing for resolutions",
+  "Committee workspace access",
+  "Document vault",
+];
 
 /* ───────── small building blocks ───────── */
 
@@ -300,8 +341,6 @@ function ToggleDoneButton({
   );
 }
 
-const modIcons = { shield: ShieldCheck, lock: LockKeyhole, ban: Ban };
-
 const emptyAnswers = (ids: string[]) =>
   Object.fromEntries(
     ids.map((id) => [id, { yes: false, detail: "" }]),
@@ -530,8 +569,10 @@ export default function Onboarding() {
     documentsCoiMutation.mutate();
   };
 
-  // Step 4 – training
-  const [trained, setTrained] = useState<TrainingModuleId[]>([]);
+  // Step 4 – training. Real, tenant-authored modules — empty until the
+  // tenant adds at least one under Board Onboarding → Training Modules.
+  const trainingModules = data?.stages.training.modules ?? [];
+  const [trained, setTrained] = useState<string[]>([]);
   useEffect(() => {
     if (data?.stages.training.completedModuleIds.length) {
       setTrained(data.stages.training.completedModuleIds);
@@ -553,24 +594,32 @@ export default function Onboarding() {
   });
 
   const submitTraining = () => {
+    if (trainingModules.length === 0)
+      return toast.error("There are no training modules to complete yet.");
     if (trained.length < trainingModules.length)
-      return toast.error("All 3 modules must be marked complete first.");
+      return toast.error("All modules must be marked complete first.");
     trainingMutation.mutate();
   };
 
-  // Step 5 – induction
+  // Step 5 – induction. Real documents the tenant has sent (see
+  // BoardMember.documents on the backend) — acknowledged one at a
+  // time; onboarding can't complete without at least one.
+  const inductionPack = data?.stages.induction.pack ?? [];
   const [inductionDate, setInductionDate] = useState("");
-  const [indDeclared, setIndDeclared] = useState(false);
+  const [ackedDocs, setAckedDocs] = useState<string[]>([]);
   useEffect(() => {
     const ack = data?.stages.induction.acknowledgement;
     if (!ack) return;
     setInductionDate(ack.scheduledDate ?? "");
-    setIndDeclared(true);
+    setAckedDocs(ack.acknowledgedDocumentIds ?? []);
   }, [data?.stages.induction.acknowledgement]);
 
   const inductionMutation = useMutation({
     mutationFn: () =>
-      submitInduction({ scheduledDate: inductionDate || undefined }),
+      submitInduction({
+        scheduledDate: inductionDate || undefined,
+        acknowledgedDocumentIds: ackedDocs,
+      }),
     onSuccess: (updated) => {
       queryClient.setQueryData(["my-onboarding"], updated);
       setViewing(6);
@@ -584,8 +633,14 @@ export default function Onboarding() {
   });
 
   const submitInductionForm = () => {
-    if (!indDeclared)
-      return toast.error("Please acknowledge receipt of the induction pack.");
+    if (inductionPack.length === 0)
+      return toast.error(
+        "Your Company Secretary hasn't sent an induction pack yet.",
+      );
+    if (ackedDocs.length < inductionPack.length)
+      return toast.error(
+        "Please review and acknowledge every document in your induction pack first.",
+      );
     inductionMutation.mutate();
   };
 
@@ -1024,30 +1079,48 @@ export default function Onboarding() {
               title={onboardingSteps[3].title}
             />
             <fieldset disabled={readOnly(4)} className="contents">
+              {trainingModules.length === 0 && (
+                <p className="mb-4 text-[12.5px] text-muted-foreground">
+                  Nothing to complete here yet — your Company Secretary hasn't
+                  set up any mandatory training modules. You can continue once
+                  they add at least one.
+                </p>
+              )}
               {trainingModules.map((m) => {
-                const Icon = modIcons[m.icon as keyof typeof modIcons];
-                const isDone = trained.includes(m.id as TrainingModuleId);
+                const isDone = trained.includes(m._id);
                 return (
                   <div
-                    key={m.id}
+                    key={m._id}
                     className="mb-2 flex items-center gap-3 rounded-lg border p-3.5"
                   >
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-info/10 text-info">
-                      <Icon className="h-4 w-4" />
+                      <GraduationCap className="h-4 w-4" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <b className="block text-[13px]">{m.title}</b>
                       <div className="text-[11px] text-muted-foreground">
-                        {m.meta}
+                        {m.description ||
+                          "Self-paced — mark complete once reviewed."}
+                        {m.resourceUrl && (
+                          <>
+                            {" · "}
+                            <a
+                              href={resolveBoardFileUrl(m.resourceUrl)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-primary underline"
+                            >
+                              Start module
+                            </a>
+                          </>
+                        )}
                       </div>
                     </div>
                     <ToggleDoneButton
                       done={isDone}
-                      label="Start module"
+                      label="Mark complete"
                       doneLabel="Complete"
-                      onClick={() =>
-                        setTrained((t) => [...t, m.id as TrainingModuleId])
-                      }
+                      onClick={() => setTrained((t) => [...t, m._id])}
                     />
                   </div>
                 );
@@ -1061,7 +1134,9 @@ export default function Onboarding() {
               disabledHint={
                 kindOf(4) === "locked"
                   ? lockedNote(4)
-                  : "All 3 modules must be marked complete first."
+                  : trainingModules.length === 0
+                    ? "Waiting on your Company Secretary to add training modules."
+                    : "All modules must be marked complete first."
               }
             >
               Complete training
@@ -1082,37 +1157,50 @@ export default function Onboarding() {
             />
             <fieldset disabled={readOnly(5)} className="contents">
               <p className="mb-2 text-[12.5px] text-muted-foreground">
-                Review the induction pack below, then acknowledge receipt.
+                Review and acknowledge each document below — your onboarding
+                can't complete until every one is acknowledged.
               </p>
-              {(data?.stages.induction.pack ?? []).length === 0 && (
+              {inductionPack.length === 0 && (
                 <p className="py-1.5 text-[12.5px] text-muted-foreground">
                   Your Company Secretary hasn't sent any induction documents
-                  yet. You can still acknowledge below once you've been briefed,
-                  or check back here later.
+                  yet. This step unlocks once they do.
                 </p>
               )}
-              {(data?.stages.induction.pack ?? []).map((item) => (
-                <div
-                  key={item._id}
-                  className="flex items-center gap-2 py-1.5 text-[12.5px]"
-                >
-                  <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  {item.fileUrl ? (
-                    <a
-                      href={resolveBoardFileUrl(item.fileUrl)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-primary underline"
-                    >
-                      {item.name}
-                    </a>
-                  ) : (
-                    <span className="text-muted-foreground">{item.name}</span>
-                  )}
-                </div>
-              ))}
+              {inductionPack.map((item) => {
+                const isAcked = ackedDocs.includes(item._id);
+                return (
+                  <div
+                    key={item._id}
+                    className="mb-2 flex items-center gap-3 rounded-lg border p-3"
+                  >
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+                      <FileText className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      {item.fileUrl ? (
+                        <a
+                          href={resolveBoardFileUrl(item.fileUrl)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[13px] font-semibold text-primary underline"
+                        >
+                          {item.name}
+                        </a>
+                      ) : (
+                        <b className="block text-[13px]">{item.name}</b>
+                      )}
+                    </div>
+                    <ToggleDoneButton
+                      done={isAcked}
+                      label="Acknowledge"
+                      doneLabel="Acknowledged"
+                      onClick={() => setAckedDocs((a) => [...a, item._id])}
+                    />
+                  </div>
+                );
+              })}
               <div className="mt-4">
-                <Field label="Schedule your induction session">
+                <Field label="Schedule your induction session (optional)">
                   <Input
                     type="date"
                     value={inductionDate}
@@ -1120,14 +1208,6 @@ export default function Onboarding() {
                   />
                 </Field>
               </div>
-              <Declaration
-                id="ind-declare"
-                checked={indDeclared || kindOf(5) === "done"}
-                onChange={setIndDeclared}
-              >
-                I acknowledge receipt of the induction pack and will review it
-                before my first board meeting.
-              </Declaration>
             </fieldset>
             <ActionButton
               done={kindOf(5) === "done"}
@@ -1137,10 +1217,12 @@ export default function Onboarding() {
               disabledHint={
                 kindOf(5) === "locked"
                   ? lockedNote(5)
-                  : "Confirming activates your full Board Portal access."
+                  : inductionPack.length === 0
+                    ? "Waiting on your Company Secretary to send an induction pack."
+                    : "Confirming activates your full Board Portal access."
               }
             >
-              Acknowledge &amp; confirm induction
+              Confirm induction
             </ActionButton>
           </div>
         </section>

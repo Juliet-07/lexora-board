@@ -73,7 +73,9 @@ export type BoardMemberLifecycleStatus = "Onboarding" | "Active" | "Offboarded";
 export type RegulatoryQuestionId = "sanction" | "bankrupt" | "convictions";
 export type CoiQuestionId = "interest" | "related";
 export type AppointmentDocumentId = "charter" | "conduct" | "nda";
-export type TrainingModuleId = "aml" | "privacy" | "abc";
+// Training modules are a real, tenant-authored catalog now (see
+// TrainingModule below) — no fixed id set any more, so this is just a
+// plain string (the module's real _id).
 
 export interface Directorship {
   company: string;
@@ -125,7 +127,10 @@ export interface SignableDocument {
   version: number;
 }
 
-// A real file in the induction pack the tenant has sent so far.
+// A real file in the induction pack the tenant has sent so far — every
+// document the tenant has uploaded for this director (from either the
+// "Documents" tab or the dedicated induction-pack sender, which now
+// write to the same place on the backend).
 export interface InductionPackFile {
   _id: string;
   name: string;
@@ -133,6 +138,19 @@ export interface InductionPackFile {
   mimeType: string | null;
   size: number;
   uploadedBy: string;
+}
+
+// A real, tenant-authored mandatory training module (Step 4) — the
+// tenant's own catalog, not a fixed reference list. "Start module"
+// opens resourceUrl when present; a module with none is still
+// completable by self-attestation.
+export interface TrainingModule {
+  _id: string;
+  title: string;
+  description: string;
+  resourceUrl: string | null;
+  resourceMimeType: string | null;
+  order: number;
 }
 
 export interface MyOnboarding {
@@ -150,11 +168,16 @@ export interface MyOnboarding {
       submission: DocumentsCoiSubmission | null;
       documents: SignableDocument[];
     };
-    training: { done: boolean; completedModuleIds: TrainingModuleId[] };
+    training: {
+      done: boolean;
+      completedModuleIds: string[];
+      modules: TrainingModule[];
+    };
     induction: {
       done: boolean;
       acknowledgement: {
         scheduledDate: string | null;
+        acknowledgedDocumentIds: string[];
         acknowledgedAt: string;
       } | null;
       pack: InductionPackFile[];
@@ -216,7 +239,7 @@ export const submitDocumentsCoi = async (dto: {
 };
 
 export const submitOnboardingTraining = async (
-  completedModuleIds: TrainingModuleId[],
+  completedModuleIds: string[],
 ): Promise<MyOnboarding> => {
   const res = await api.post("/board-portal/onboarding/training", {
     completedModuleIds,
@@ -226,6 +249,7 @@ export const submitOnboardingTraining = async (
 
 export const submitInduction = async (dto: {
   scheduledDate?: string;
+  acknowledgedDocumentIds: string[];
 }): Promise<MyOnboarding> => {
   const res = await api.post("/board-portal/onboarding/induction", dto);
   return unwrap(res);
