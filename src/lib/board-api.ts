@@ -347,3 +347,49 @@ export const fetchMyCommittees = async (): Promise<MyCommittee[]> => {
   const d = unwrap(res);
   return Array.isArray(d) ? d : [];
 };
+
+// ══════════════════════════════════════════════════════════════
+// Board of Directors overview — the whole-board card on My
+// Committees, distinct from any single committee. Per
+// board-portal.controller.ts#getBoardOverview /
+// board-member.service.ts#getBoardOverview: this director's own
+// role/status, how many active board members the tenant has, their
+// own real Board-meeting attendance (computed server-side from
+// GovernanceMeeting records, not typed in anywhere), and the
+// tenant's current published Board Charter (a Governance Code with
+// category "Board Charter" — there's no separate charter document).
+// ══════════════════════════════════════════════════════════════
+
+export interface BoardAttendance {
+  pct: number;
+  present: number;
+  eligible: number;
+}
+
+export interface BoardCharter {
+  id: string;
+  title: string;
+  version: number;
+  // Rich-text/HTML body, same as a Governance Code's body elsewhere
+  // in the app — rendered as-is, not parsed into a fixed
+  // purpose/principles shape.
+  body: string;
+  publishedAt: string | null;
+}
+
+export interface BoardOverview {
+  name: string;
+  role: string;
+  status: string;
+  totalMembers: number;
+  // null until at least one Board-type meeting has had attendance
+  // recorded and this director was on its attendee list.
+  attendance: BoardAttendance | null;
+  // null until the tenant has published a Board Charter code.
+  charter: BoardCharter | null;
+}
+
+export const fetchBoardOverview = async (): Promise<BoardOverview> => {
+  const res = await api.get("/board-portal/board-overview");
+  return unwrap(res);
+};

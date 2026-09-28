@@ -18,6 +18,11 @@ import ComingSoon from "@/pages/ComingSoon";
 import SignContractPage from "@/pages/SignContractPage";
 import { NAV_GROUPS } from "@/components/layout/nav";
 import Committees from "./pages/Committees";
+import Meetings from "./pages/Meetings";
+import BoardPacks from "@/pages/BoardPacks";
+import Declarations from "@/pages/Declarations";
+import Evaluations from "@/pages/Evaluations";
+import Directory from "@/pages/Directory";
 
 const queryClient = new QueryClient();
 
@@ -41,6 +46,11 @@ const BUILT_ROUTES = [
   "/onboarding",
   "/governance-codes",
   "/committees",
+  "/meetings",
+  "/board-packs",
+  "/declarations",
+  "/evaluations",
+  "/directory",
 ];
 const placeholderRoutes = NAV_GROUPS.flatMap((g) => g.items).filter(
   (i) => !BUILT_ROUTES.includes(i.url),
@@ -83,6 +93,11 @@ const App = () => (
                 element={<GovernanceCodeApprovals />}
               />
               <Route path="/committees" element={<Committees />} />
+              <Route path="/meetings" element={<Meetings />} />
+              <Route path="/board-packs" element={<BoardPacks />} />
+              <Route path="/declarations" element={<Declarations />} />
+              <Route path="/evaluations" element={<Evaluations />} />
+              <Route path="/directory" element={<Directory />} />
               {placeholderRoutes.map((i) => (
                 <Route
                   key={i.url}

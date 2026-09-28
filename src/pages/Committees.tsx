@@ -28,10 +28,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { boardOfDirectors } from "@/data/committeesMockData";
 import {
   fetchMyCommittees,
   fetchMyProfile,
+  fetchBoardOverview,
   type MyCommittee,
 } from "@/lib/board-api";
 
@@ -69,6 +69,14 @@ export default function Committees() {
     queryKey: ["board-my-committees"],
     queryFn: fetchMyCommittees,
   });
+  const {
+    data: boardOverview,
+    isLoading: isBoardOverviewLoading,
+    isError: isBoardOverviewError,
+  } = useQuery({
+    queryKey: ["board-overview"],
+    queryFn: fetchBoardOverview,
+  });
 
   const totalTasks = committees.reduce((n, c) => n + c.tasks.length, 0);
   const openTasks = committees.reduce(
@@ -81,7 +89,7 @@ export default function Committees() {
   const featured =
     committees.find((c) => c.myRole === "Chair") ?? committees[0] ?? null;
 
-  if (isLoading) {
+  if (isLoading || isBoardOverviewLoading) {
     return (
       <div className="flex items-center justify-center gap-2 py-24 text-muted-foreground">
         <Loader2 className="h-5 w-5 animate-spin" />
@@ -99,7 +107,7 @@ export default function Committees() {
         </p>
       </div>
 
-      {isError && (
+      {(isError || isBoardOverviewError) && (
         <p className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
           Couldn't load your committees. Try refreshing the page.
         </p>
@@ -149,47 +157,64 @@ export default function Committees() {
           </Card>
         )}
 
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[15px] font-bold">{boardOfDirectors.name}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Role:{" "}
-                  <span className="font-semibold text-foreground">
-                    {boardOfDirectors.role}
-                  </span>
-                </p>
+        {boardOverview && (
+          <Card>
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[15px] font-bold">{boardOverview.name}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Role:{" "}
+                    <span className="font-semibold text-foreground">
+                      {boardOverview.role}
+                    </span>
+                  </p>
+                </div>
+                <Badge className="bg-success/10 text-success hover:bg-success/10">
+                  {boardOverview.status}
+                </Badge>
               </div>
-              <Badge className="bg-success/10 text-success hover:bg-success/10">
-                {boardOfDirectors.status}
-              </Badge>
-            </div>
-            <div className="mt-3">
-              <Kv label="Members">{boardOfDirectors.members}</Kv>
-              <div className="flex items-center justify-between py-2 text-[12.5px]">
-                <span className="text-muted-foreground">Your attendance</span>
-                <span className="font-semibold text-success">
-                  {boardOfDirectors.attendancePct}% (
-                  {boardOfDirectors.attendanceFraction})
-                </span>
+              <div className="mt-3">
+                <Kv label="Members">{boardOverview.totalMembers} directors</Kv>
+                {boardOverview.attendance ? (
+                  <>
+                    <div className="flex items-center justify-between py-2 text-[12.5px]">
+                      <span className="text-muted-foreground">
+                        Your attendance
+                      </span>
+                      <span className="font-semibold text-success">
+                        {boardOverview.attendance.pct}% (
+                        {boardOverview.attendance.present}/
+                        {boardOverview.attendance.eligible})
+                      </span>
+                    </div>
+                    <Progress
+                      value={boardOverview.attendance.pct}
+                      className="h-1.5"
+                    />
+                  </>
+                ) : (
+                  <p className="py-2 text-[12.5px] text-muted-foreground">
+                    No board meetings recorded yet.
+                  </p>
+                )}
               </div>
-              <Progress
-                value={boardOfDirectors.attendancePct}
-                className="h-1.5"
-              />
-            </div>
-            <div className="mt-3">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setCharterOpen(true)}
-              >
-                <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> View charter
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+              <div className="mt-3">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!boardOverview.charter}
+                  onClick={() => setCharterOpen(true)}
+                >
+                  <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                  {boardOverview.charter
+                    ? "View charter"
+                    : "No charter published"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* All committees table */}
@@ -359,35 +384,27 @@ export default function Committees() {
         </DialogContent>
       </Dialog>
 
-      {/* Board charter */}
+      {/* Board charter — the tenant's currently published Governance
+          Code with category "Board Charter" (governance-code.schema.ts;
+          there's no separate charter entity). */}
       <Dialog open={charterOpen} onOpenChange={setCharterOpen}>
         <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{boardOfDirectors.name} — Charter</DialogTitle>
-            <DialogDescription>
-              {boardOfDirectors.charter.version}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1 text-sm">
-            <div>
-              <p className="mb-1 text-[12.5px] font-bold text-muted-foreground">
-                Purpose
-              </p>
-              <p className="text-[13px] leading-relaxed">
-                {boardOfDirectors.charter.purpose}
-              </p>
-            </div>
-            <div>
-              <p className="mb-1.5 text-[12.5px] font-bold text-muted-foreground">
-                Operating principles
-              </p>
-              <ul className="list-disc space-y-1.5 pl-5 text-[13px] leading-relaxed">
-                {boardOfDirectors.charter.principles.map((p) => (
-                  <li key={p}>{p}</li>
-                ))}
-              </ul>
-            </div>
-          </div>
+          {boardOverview?.charter && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{boardOverview.charter.title}</DialogTitle>
+                <DialogDescription>
+                  Version {boardOverview.charter.version}
+                  {boardOverview.charter.publishedAt &&
+                    ` · Published ${shortDate(boardOverview.charter.publishedAt)}`}
+                </DialogDescription>
+              </DialogHeader>
+              <div
+                className="prose prose-sm max-h-[60vh] max-w-none overflow-y-auto rounded-md border p-4 text-sm"
+                dangerouslySetInnerHTML={{ __html: boardOverview.charter.body }}
+              />
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>
