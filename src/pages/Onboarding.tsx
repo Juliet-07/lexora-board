@@ -69,16 +69,21 @@ const regulatoryQuestions = [
   { id: "convictions", text: "Do you have any unspent criminal convictions?" },
 ];
 
-const coiQuestions = [
-  {
-    id: "interest",
-    text: "Do you, or a close family member, have any financial interest in transactions involving Lexora Africa?",
-  },
-  {
-    id: "related",
-    text: "Are you related to, or do you have a close personal relationship with, any other director or senior manager?",
-  },
-];
+// Text depends on the real tenant company that appointed this director
+// (not the platform itself), so only the ids are fixed here — see
+// getCoiQuestionText below for the tenant-aware wording.
+const coiQuestions = [{ id: "interest" }, { id: "related" }];
+
+function getCoiQuestionText(id: string, tenantCompanyName: string): string {
+  switch (id) {
+    case "interest":
+      return `Do you, or a close family member, have any financial interest in transactions involving ${tenantCompanyName}?`;
+    case "related":
+      return "Are you related to, or do you have a close personal relationship with, any other director or senior manager?";
+    default:
+      return "";
+  }
+}
 
 const portalFeatures = [
   "Meeting packs & board calendar",
@@ -367,6 +372,11 @@ export default function Onboarding() {
     queryKey: ["my-profile"],
     queryFn: fetchMyProfile,
   });
+  // The real tenant that appointed this director — onboarding questions
+  // and the declaration text reference this instead of the platform's
+  // own name. Falls back to generic wording while the profile is still
+  // loading.
+  const tenantCompanyName = profile?.tenantCompanyName || "the company";
 
   const stageOrder: Array<keyof NonNullable<typeof data>["stages"]> = [
     "accept",
@@ -907,8 +917,8 @@ export default function Onboarding() {
                 onChange={setRegDeclared}
               >
                 I declare that the information provided is true and complete,
-                and I consent to Lexora Africa submitting this declaration to
-                the relevant Regulator on my behalf.
+                and I consent to {tenantCompanyName} submitting this declaration
+                to the relevant Regulator on my behalf.
               </Declaration>
             </fieldset>
             <ActionButton
@@ -1062,7 +1072,7 @@ export default function Onboarding() {
                 <YesNo
                   key={q.id}
                   id={`coi-${q.id}`}
-                  question={q.text}
+                  question={getCoiQuestionText(q.id, tenantCompanyName)}
                   value={coiAnswers[q.id].yes}
                   onChange={(yes) =>
                     setCoiAnswers((a) => ({

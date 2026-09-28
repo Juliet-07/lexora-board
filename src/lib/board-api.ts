@@ -201,6 +201,10 @@ export const fetchMyProfile = async (): Promise<{
   // of onboarding unless the tenant left them blank.
   nationality: string;
   idNumber: string;
+  // The real tenant company that appointed this director — used instead
+  // of the platform's own name ("Lexora Africa") in onboarding questions
+  // and declaration text, since the director is declaring to this tenant.
+  tenantCompanyName: string;
 }> => {
   const res = await api.get("/board-portal/me");
   return unwrap(res);
