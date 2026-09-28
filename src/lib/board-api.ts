@@ -303,3 +303,47 @@ export const decideGovernanceCode = async (
   });
   return unwrap(res);
 };
+
+// ══════════════════════════════════════════════════════════════
+// My Committees — the committees this director belongs to, per
+// board-portal.controller.ts#getMyCommittees /
+// committee.service.ts#getForBoardMemberPortal. Membership itself is
+// set up entirely on the tenant side (Committees / Board Management
+// pages there); this is a read-only view of it plus the committee's
+// own tasks.
+// ══════════════════════════════════════════════════════════════
+
+export type CommitteeMemberRole = "Chair" | "Secretary" | "Member";
+export type CommitteeTaskStatus = "Open" | "In Progress" | "Done";
+
+export interface MyCommitteeTask {
+  title: string;
+  // Display snapshot of the owner's name.
+  owner: string;
+  // Real link to whichever board member owns this task — compare
+  // against the signed-in director's own id to highlight "my tasks".
+  ownerBoardMemberId: string | null;
+  dueDate: string;
+  status: CommitteeTaskStatus;
+}
+
+export interface MyCommittee {
+  _id: string;
+  name: string;
+  purpose: string;
+  cadence: string;
+  quorum: string;
+  charter: string;
+  nextMeeting: string | null;
+  chair: string | null;
+  membersCount: number;
+  // This director's own role on this committee.
+  myRole: CommitteeMemberRole;
+  tasks: MyCommitteeTask[];
+}
+
+export const fetchMyCommittees = async (): Promise<MyCommittee[]> => {
+  const res = await api.get("/board-portal/committees");
+  const d = unwrap(res);
+  return Array.isArray(d) ? d : [];
+};
