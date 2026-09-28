@@ -23,6 +23,7 @@ import BoardPacks from "@/pages/BoardPacks";
 import Declarations from "@/pages/Declarations";
 import Evaluations from "@/pages/Evaluations";
 import Directory from "@/pages/Directory";
+import BoardCalendar from "./pages/Calendar";
 
 const queryClient = new QueryClient();
 
@@ -51,6 +52,7 @@ const BUILT_ROUTES = [
   "/declarations",
   "/evaluations",
   "/directory",
+  "/calendar",
 ];
 const placeholderRoutes = NAV_GROUPS.flatMap((g) => g.items).filter(
   (i) => !BUILT_ROUTES.includes(i.url),
@@ -98,6 +100,7 @@ const App = () => (
               <Route path="/declarations" element={<Declarations />} />
               <Route path="/evaluations" element={<Evaluations />} />
               <Route path="/directory" element={<Directory />} />
+              <Route path="/calendar" element={<BoardCalendar />} />
               {placeholderRoutes.map((i) => (
                 <Route
                   key={i.url}

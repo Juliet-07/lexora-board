@@ -393,3 +393,100 @@ export const fetchBoardOverview = async (): Promise<BoardOverview> => {
   const res = await api.get("/board-portal/board-overview");
   return unwrap(res);
 };
+
+// ══════════════════════════════════════════════════════════════
+// Meetings — "receive everything pertaining to it... both via email
+// and on their board portal". Per
+// board-portal.controller.ts#getMyMeetings/submitMeetingAck/
+// setMyMeetingActionItemStatus and
+// meeting.service.ts#getForBoardMemberPortal: every real, dispatched
+// (non-Draft) meeting this director is an attendee of, scoped
+// server-side to their own attendee record — never a free-text RSVP
+// or a locally invented action-item list. Meetings are created and
+// dispatched entirely from the tenant app; this is a read + narrow
+// self-service view (RSVP, mark own action items done).
+// ══════════════════════════════════════════════════════════════
+
+export type MyMeetingAudienceType =
+  | "Board"
+  | "Committee"
+  | "Executive"
+  | "Ad-hoc";
+export type MyMeetingMode = "Physical" | "Online";
+export type MyMeetingStatus = "Sent" | "Held" | "Postponed";
+export type MyMeetingActionItemStatus = "Open" | "Done";
+
+export interface MyMeetingAgendaItem {
+  title: string;
+  presenter: string;
+  durationMinutes: number;
+}
+
+export interface MyMeetingBoardPackDoc {
+  name: string;
+  fileUrl: string | null;
+  mimeType: string | null;
+  size: number;
+  uploadedAt: string;
+}
+
+export interface MyMeetingActionItem {
+  _id: string;
+  title: string;
+  description: string;
+  dueDate: string | null;
+  status: MyMeetingActionItemStatus;
+  completedAt: string | null;
+}
+
+export interface MyMeeting {
+  _id: string;
+  title: string;
+  type: MyMeetingAudienceType;
+  committeeId: string | null;
+  date: string;
+  mode: MyMeetingMode;
+  location: string;
+  chair: string;
+  status: MyMeetingStatus;
+  agenda: MyMeetingAgendaItem[];
+  boardPack: MyMeetingBoardPackDoc[];
+  // Only populated once minutes have actually been sent — a director
+  // is never shown a draft/unsent minutes text.
+  minutes: string | null;
+  minutesPdfUrl: string | null;
+  minutesSentAt: string | null;
+  // null until attendance has been recorded for this meeting.
+  myAttendance: boolean | null;
+  myAck: { agendaConfirmed: boolean; confirmedAt: string } | null;
+  // This director's own action items only, never the full meeting list.
+  actionItems: MyMeetingActionItem[];
+}
+
+export const fetchMyMeetings = async (): Promise<MyMeeting[]> => {
+  const res = await api.get("/board-portal/meetings");
+  const d = unwrap(res);
+  return Array.isArray(d) ? d : [];
+};
+
+export const submitMeetingAck = async (
+  meetingId: string,
+  agendaConfirmed: boolean,
+): Promise<MyMeeting> => {
+  const res = await api.post(`/board-portal/meetings/${meetingId}/ack`, {
+    agendaConfirmed,
+  });
+  return unwrap(res);
+};
+
+export const setMyMeetingActionItemStatus = async (
+  meetingId: string,
+  actionItemId: string,
+  status: MyMeetingActionItemStatus,
+): Promise<MyMeeting> => {
+  const res = await api.patch(
+    `/board-portal/meetings/${meetingId}/action-items/${actionItemId}/status`,
+    { status },
+  );
+  return unwrap(res);
+};
