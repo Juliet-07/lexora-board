@@ -17,6 +17,7 @@ import GovernanceCodeApprovals from "@/pages/GovernanceCodeApprovals";
 import ComingSoon from "@/pages/ComingSoon";
 import SignContractPage from "@/pages/SignContractPage";
 import { NAV_GROUPS } from "@/components/layout/nav";
+import Committees from "./pages/Committees";
 
 const queryClient = new QueryClient();
 
@@ -35,7 +36,12 @@ function GuestOnly({ children }: { children: React.ReactNode }) {
 }
 
 // Pages that have a real screen; everything else still renders the placeholder.
-const BUILT_ROUTES = ["/dashboard", "/onboarding", "/governance-codes"];
+const BUILT_ROUTES = [
+  "/dashboard",
+  "/onboarding",
+  "/governance-codes",
+  "/committees",
+];
 const placeholderRoutes = NAV_GROUPS.flatMap((g) => g.items).filter(
   (i) => !BUILT_ROUTES.includes(i.url),
 );
@@ -76,6 +82,7 @@ const App = () => (
                 path="/governance-codes"
                 element={<GovernanceCodeApprovals />}
               />
+              <Route path="/committees" element={<Committees />} />
               {placeholderRoutes.map((i) => (
                 <Route
                   key={i.url}
