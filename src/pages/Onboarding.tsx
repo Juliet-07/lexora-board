@@ -16,6 +16,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import {
@@ -500,6 +506,13 @@ export default function Onboarding() {
   // there's simply nothing required here.
   const signDocuments = data?.stages.documentsCoi.documents ?? [];
   const [signed, setSigned] = useState<string[]>([]);
+  // Which signable document's content is currently open in the viewer
+  // dialog below — most codes are authored in-app (rich text, no
+  // file), so this (not a fileUrl link) is how a director actually
+  // reads what they're signing.
+  const [viewingDoc, setViewingDoc] = useState<
+    (typeof signDocuments)[number] | null
+  >(null);
   const [holdsDirs, setHoldsDirs] = useState(true);
   const [currentDirs, setCurrentDirs] = useState<Directorship[]>([
     { company: "", position: "", detail: "" },
@@ -950,7 +963,7 @@ export default function Onboarding() {
                       <b className="block text-[13px]">{d.title}</b>
                       <div className="text-[11px] text-muted-foreground">
                         {d.category}
-                        {d.fileUrl && (
+                        {d.fileUrl ? (
                           <>
                             {" · "}
                             <a
@@ -962,7 +975,18 @@ export default function Onboarding() {
                               View document
                             </a>
                           </>
-                        )}
+                        ) : d.body ? (
+                          <>
+                            {" · "}
+                            <button
+                              type="button"
+                              className="text-primary underline"
+                              onClick={() => setViewingDoc(d)}
+                            >
+                              View document
+                            </button>
+                          </>
+                        ) : null}
                       </div>
                     </div>
                     <ToggleDoneButton
@@ -974,6 +998,21 @@ export default function Onboarding() {
                   </div>
                 );
               })}
+
+              <Dialog
+                open={!!viewingDoc}
+                onOpenChange={(open) => !open && setViewingDoc(null)}
+              >
+                <DialogContent className="max-h-[80vh] max-w-2xl overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>{viewingDoc?.title}</DialogTitle>
+                  </DialogHeader>
+                  <div
+                    className="prose prose-sm max-w-none"
+                    dangerouslySetInnerHTML={{ __html: viewingDoc?.body ?? "" }}
+                  />
+                </DialogContent>
+              </Dialog>
 
               <h3 className="mb-1 mt-6 text-[13px] font-bold">
                 Conflict of Interest declaration

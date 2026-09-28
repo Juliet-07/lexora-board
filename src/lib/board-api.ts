@@ -123,6 +123,10 @@ export interface SignableDocument {
   title: string;
   category: string;
   sourceCodeId: string | null;
+  // The code's rich-text body at assignment time — codes are authored
+  // in-app, not uploaded as files, so this (not fileUrl) is what lets
+  // the director actually read and review what they're signing.
+  body: string;
   fileUrl: string | null;
   version: number;
 }
