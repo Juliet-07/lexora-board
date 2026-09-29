@@ -580,3 +580,72 @@ export const setMyMeetingActionItemStatus = async (
   );
   return unwrap(res);
 };
+
+// ══════════════════════════════════════════════════════════════
+// Dashboard — the portal's landing page. Per
+// board-portal.controller.ts#getMyDashboard /
+// BoardDashboardService#getForBoardMember: every number and item here
+// is computed server-side from real onboarding, meeting, board-pack
+// and governance-code records — nothing fabricated, and nothing links
+// to a page (Declarations, Evaluations, Board Directory, Resolutions)
+// that isn't wired to the backend yet.
+// ══════════════════════════════════════════════════════════════
+
+export type Tone = "red" | "amber" | "blue" | "violet" | "green" | "gray";
+
+export type DashboardAttentionKind =
+  | "onboarding"
+  | "sign"
+  | "rsvp"
+  | "ack"
+  | "pack"
+  | "code"
+  | "action";
+
+export interface DashboardAttentionItem {
+  id: string;
+  kind: DashboardAttentionKind;
+  title: string;
+  subtitle: string;
+  tone: Tone;
+  pill: string;
+  to: string;
+}
+
+export interface DashboardUpcomingMeeting {
+  id: string;
+  date: string;
+  title: string;
+  location: string;
+  mode: MyMeetingMode;
+  tag: string;
+  tagTone: Tone;
+}
+
+export interface DashboardStandingItem {
+  id: string;
+  label: string;
+  status: string;
+  due: string;
+  tone: Tone;
+}
+
+export interface MyDashboard {
+  kpis: {
+    pendingActions: number;
+    documentsToSign: number;
+    boardPacksToRead: number;
+    boardPacksTotal: number;
+    nextMeeting: { title: string; date: string } | null;
+    cpdHoursYTD: number;
+    pendingCodeDecisions: number;
+  };
+  attentionItems: DashboardAttentionItem[];
+  upcomingMeetings: DashboardUpcomingMeeting[];
+  standing: DashboardStandingItem[];
+}
+
+export const fetchMyDashboard = async (): Promise<MyDashboard> => {
+  const res = await api.get("/board-portal/dashboard");
+  return unwrap(res);
+};
