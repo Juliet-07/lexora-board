@@ -1,76 +1,85 @@
 import { useState } from "react";
-import {
-  AlertCircle,
-  CalendarClock,
-  GraduationCap,
-  ShieldCheck,
-  Users,
-} from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { CalendarClock, Loader2, Users } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import {
-  calendarFilters,
-  calendarGroups,
-  matchesFilter,
-  type EventCategory,
-  type FilterKey,
-  type PillVariant,
-} from "@/data/calendaMockData";
+import { fetchMyMeetings, type MyMeeting } from "@/lib/board-api";
 
-const CATEGORY_ICON: Record<EventCategory, React.ElementType> = {
-  meeting: CalendarClock,
-  committee: Users,
-  deadline: AlertCircle,
-  training: GraduationCap,
-  regulatory: ShieldCheck,
-};
+// The board calendar — real meetings this director is invited to,
+// grouped by month. A meeting is added here as soon as its Notice or
+// board pack has been dispatched (the same visibility rule as "My
+// Meetings"). Other governance milestones (compliance deadlines,
+// training dates) aren't yet surfaced to the board portal from a real
+// source, so this stays meetings-only rather than mixing in
+// fabricated categories — unlike the earlier mock version of this
+// page.
 
-const CATEGORY_ICON_CLASS: Record<EventCategory, string> = {
-  meeting: "bg-primary/10 text-primary",
-  committee: "bg-success/10 text-success",
-  deadline: "bg-warning/15 text-amber-700",
-  training: "bg-success/10 text-success",
-  regulatory: "bg-muted text-muted-foreground",
-};
+type FilterKey = "all" | "needs-rsvp" | "past";
 
-function pillClass(variant: PillVariant) {
-  switch (variant) {
-    case "red":
-      return "bg-destructive/10 text-destructive hover:bg-destructive/10";
-    case "amber":
-      return "bg-warning/15 text-amber-700 hover:bg-warning/15";
-    case "green":
-      return "bg-success/10 text-success hover:bg-success/10";
-    case "violet":
-      return "bg-primary/10 text-primary hover:bg-primary/10";
-    default:
-      return "border-border bg-muted text-muted-foreground hover:bg-muted";
-  }
-}
+const FILTERS: { key: FilterKey; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "needs-rsvp", label: "Needs RSVP" },
+  { key: "past", label: "Past" },
+];
+
+const monthLabel = (d: Date) =>
+  d.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
 
 export default function BoardCalendar() {
   const [filter, setFilter] = useState<FilterKey>("all");
+  const { data: meetings = [], isLoading } = useQuery({
+    queryKey: ["board-my-meetings"],
+    queryFn: fetchMyMeetings,
+  });
 
-  const visibleGroups = calendarGroups
-    .map((g) => ({
-      ...g,
-      events: g.events.filter((e) => matchesFilter(e.category, filter)),
-    }))
-    .filter((g) => g.events.length > 0);
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-24 text-muted-foreground">
+        <Loader2 className="h-5 w-5 animate-spin" />
+        Loading your calendar…
+      </div>
+    );
+  }
+
+  const now = Date.now();
+  const filtered = meetings.filter((m) => {
+    const isPast = new Date(m.date).getTime() < now;
+    if (filter === "past") return isPast;
+    if (filter === "needs-rsvp")
+      return (
+        !isPast &&
+        !!m.notice &&
+        (!m.myNoticeRsvp || m.myNoticeRsvp.rsvp === "Pending")
+      );
+    return !isPast;
+  });
+
+  const sorted = [...filtered].sort((a, b) =>
+    filter === "past"
+      ? +new Date(b.date) - +new Date(a.date)
+      : +new Date(a.date) - +new Date(b.date),
+  );
+
+  const groups: { label: string; meetings: MyMeeting[] }[] = [];
+  for (const m of sorted) {
+    const label = monthLabel(new Date(m.date));
+    const g = groups.find((x) => x.label === label);
+    if (g) g.meetings.push(m);
+    else groups.push({ label, meetings: [m] });
+  }
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Board Calendar</h1>
         <p className="text-sm text-muted-foreground">
-          Unified view of meetings, submission deadlines, training dates, and
-          key governance milestones.
+          Your board and committee meetings, in one timeline.
         </p>
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {calendarFilters.map((f) => (
+        {FILTERS.map((f) => (
           <button
             key={f.key}
             onClick={() => setFilter(f.key)}
@@ -88,12 +97,12 @@ export default function BoardCalendar() {
 
       <Card>
         <CardContent className="divide-y p-5">
-          {visibleGroups.length === 0 && (
+          {groups.length === 0 && (
             <p className="py-6 text-center text-sm text-muted-foreground">
-              No events in this category.
+              No meetings in this view.
             </p>
           )}
-          {visibleGroups.map((group, gi) => (
+          {groups.map((group, gi) => (
             <div
               key={group.label}
               className={cn("space-y-2", gi > 0 && "pt-5")}
@@ -102,42 +111,56 @@ export default function BoardCalendar() {
                 {group.label}
               </p>
               <div className="space-y-2">
-                {group.events.map((ev) => {
-                  const Icon = CATEGORY_ICON[ev.category];
+                {group.meetings.map((m) => {
+                  const d = new Date(m.date);
+                  const needsRsvp =
+                    !!m.notice &&
+                    (!m.myNoticeRsvp || m.myNoticeRsvp.rsvp === "Pending");
                   return (
                     <div
-                      key={ev.id}
+                      key={m._id}
                       className="flex items-center gap-3.5 rounded-xl border bg-card p-3.5"
                     >
                       <div className="flex w-12 shrink-0 flex-col items-center">
                         <span className="text-lg font-extrabold leading-none">
-                          {ev.day}
+                          {d.getDate()}
                         </span>
                         <span className="text-[10px] font-bold tracking-wider text-muted-foreground">
-                          {ev.month}
+                          {d
+                            .toLocaleString("en", { month: "short" })
+                            .toUpperCase()}
                         </span>
                       </div>
-                      <div
-                        className={cn(
-                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
-                          CATEGORY_ICON_CLASS[ev.category],
-                        )}
-                      >
-                        <Icon className="h-4 w-4" />
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <Users className="h-4 w-4" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold">{ev.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {ev.subtitle}
+                        <p className="text-sm font-semibold">{m.title}</p>
+                        <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <CalendarClock className="h-3 w-3" />
+                          {d.toLocaleString("en", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}{" "}
+                          · {m.mode === "Online" ? "Online" : m.location}
                         </p>
                       </div>
                       <Badge
-                        className={cn("shrink-0", pillClass(ev.pillVariant))}
-                        variant={
-                          ev.pillVariant === "gray" ? "outline" : "default"
-                        }
+                        className={cn(
+                          "shrink-0",
+                          needsRsvp
+                            ? "bg-warning/15 text-amber-700 hover:bg-warning/15"
+                            : m.status === "Held"
+                              ? "border-border bg-muted text-muted-foreground hover:bg-muted"
+                              : "bg-primary/10 text-primary hover:bg-primary/10",
+                        )}
+                        variant={needsRsvp ? "default" : "outline"}
                       >
-                        {ev.pillLabel}
+                        {needsRsvp
+                          ? "RSVP needed"
+                          : m.status === "Held"
+                            ? "Held"
+                            : m.type}
                       </Badge>
                     </div>
                   );

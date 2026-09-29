@@ -7,6 +7,7 @@ import {
   ClipboardList,
   FileText,
   Loader2,
+  Mail,
   Mic,
   Paperclip,
   Users2,
@@ -36,6 +37,8 @@ import {
   fetchMyMeetings,
   fetchMyProfile,
   submitMeetingAck,
+  submitMeetingNoticeRsvp,
+  markMeetingNoticeOpened,
   setMyMeetingActionItemStatus,
   resolveBoardFileUrl,
   type MyMeeting,
@@ -104,6 +107,31 @@ export default function Meetings() {
         err?.response?.data?.message ?? "Failed to acknowledge the agenda.",
       ),
   });
+
+  const noticeRsvpMut = useMutation({
+    mutationFn: ({
+      meetingId,
+      rsvp,
+    }: {
+      meetingId: string;
+      rsvp: "Confirmed" | "Apologies";
+    }) => submitMeetingNoticeRsvp(meetingId, rsvp),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["board-my-meetings"] });
+      toast.success("RSVP recorded.");
+    },
+    onError: (err: any) =>
+      toast.error(err?.response?.data?.message ?? "Failed to record RSVP."),
+  });
+
+  const openNotice = (m: MyMeeting) => {
+    setMinutesTarget(m);
+    if (m.notice && !m.myNoticeRsvp?.openedAt) {
+      markMeetingNoticeOpened(m._id).then(() =>
+        qc.invalidateQueries({ queryKey: ["board-my-meetings"] }),
+      );
+    }
+  };
 
   const actionStatusMut = useMutation({
     mutationFn: ({
@@ -219,6 +247,23 @@ export default function Meetings() {
                           You chair
                         </Badge>
                       )}
+                      {m.notice &&
+                        (m.myNoticeRsvp?.rsvp === "Confirmed" ? (
+                          <Badge className="bg-success/10 text-success hover:bg-success/10">
+                            ✓ RSVP'd — attending
+                          </Badge>
+                        ) : m.myNoticeRsvp?.rsvp === "Apologies" ? (
+                          <Badge
+                            variant="outline"
+                            className="border-border bg-muted text-muted-foreground hover:bg-muted"
+                          >
+                            RSVP'd — apologies
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-warning/15 text-amber-700 hover:bg-warning/15">
+                            RSVP needed
+                          </Badge>
+                        ))}
                       {m.myAck ? (
                         <Badge className="bg-success/10 text-success hover:bg-success/10">
                           ✓ Agenda acknowledged
@@ -254,7 +299,7 @@ export default function Meetings() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setMinutesTarget(m)}
+                      onClick={() => openNotice(m)}
                     >
                       <FileText className="mr-1.5 h-3.5 w-3.5" /> View meeting
                     </Button>
@@ -445,6 +490,66 @@ export default function Meetings() {
                 </DialogDescription>
               </DialogHeader>
               <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1 text-sm">
+                {minutesTarget.notice && (
+                  <div className="rounded-md border p-3">
+                    <p className="mb-1.5 flex items-center gap-1.5 text-[12.5px] font-bold text-muted-foreground">
+                      <Mail className="h-3.5 w-3.5" /> Notice
+                    </p>
+                    <p className="whitespace-pre-wrap text-[13px]">
+                      {minutesTarget.notice.body}
+                    </p>
+                    {minutesTarget.notice.rsvpDeadline && (
+                      <p className="mt-1.5 text-[11px] text-amber-700">
+                        RSVP by {shortDate(minutesTarget.notice.rsvpDeadline)}
+                      </p>
+                    )}
+                    <div className="mt-2.5">
+                      {minutesTarget.myNoticeRsvp?.rsvp &&
+                      minutesTarget.myNoticeRsvp.rsvp !== "Pending" ? (
+                        <Badge
+                          className={
+                            minutesTarget.myNoticeRsvp.rsvp === "Confirmed"
+                              ? "bg-success/10 text-success hover:bg-success/10"
+                              : "border-border bg-muted text-muted-foreground hover:bg-muted"
+                          }
+                        >
+                          RSVP'd —{" "}
+                          {minutesTarget.myNoticeRsvp.rsvp === "Confirmed"
+                            ? "attending"
+                            : "apologies"}
+                        </Badge>
+                      ) : (
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            disabled={noticeRsvpMut.isPending}
+                            onClick={() =>
+                              noticeRsvpMut.mutate({
+                                meetingId: minutesTarget._id,
+                                rsvp: "Confirmed",
+                              })
+                            }
+                          >
+                            I will attend
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={noticeRsvpMut.isPending}
+                            onClick={() =>
+                              noticeRsvpMut.mutate({
+                                meetingId: minutesTarget._id,
+                                rsvp: "Apologies",
+                              })
+                            }
+                          >
+                            Apologies
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
                 <div>
                   <p className="mb-1.5 flex items-center gap-1.5 text-[12.5px] font-bold text-muted-foreground">
                     <CalendarClock className="h-3.5 w-3.5" /> Agenda

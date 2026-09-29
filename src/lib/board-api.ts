@@ -461,12 +461,45 @@ export interface MyMeeting {
   myAck: { agendaConfirmed: boolean; confirmedAt: string } | null;
   // This director's own action items only, never the full meeting list.
   actionItems: MyMeetingActionItem[];
+  // Set once the tenant has dispatched the meeting Notice — visible
+  // (and RSVP-able) even while the meeting itself is still Draft, ahead
+  // of the board pack. Null until the notice goes out.
+  notice: {
+    body: string;
+    rsvpDeadline: string | null;
+    dispatchedAt: string;
+  } | null;
+  myNoticeRsvp: {
+    rsvp: "Pending" | "Confirmed" | "Apologies";
+    openedAt: string | null;
+  } | null;
 }
 
 export const fetchMyMeetings = async (): Promise<MyMeeting[]> => {
   const res = await api.get("/board-portal/meetings");
   const d = unwrap(res);
   return Array.isArray(d) ? d : [];
+};
+
+export const submitMeetingNoticeRsvp = async (
+  meetingId: string,
+  rsvp: "Confirmed" | "Apologies",
+): Promise<MyMeeting> => {
+  const res = await api.post(
+    `/board-portal/meetings/${meetingId}/notice/rsvp`,
+    { rsvp },
+  );
+  return unwrap(res);
+};
+
+export const markMeetingNoticeOpened = async (
+  meetingId: string,
+): Promise<{ success: boolean }> => {
+  const res = await api.post(
+    `/board-portal/meetings/${meetingId}/notice/opened`,
+    {},
+  );
+  return unwrap(res);
 };
 
 export const submitMeetingAck = async (
