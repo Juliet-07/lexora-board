@@ -42,12 +42,6 @@ export const NAV_GROUPS: PortalNavGroup[] = [
     label: "My Portal",
     items: [
       { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-      {
-        title: "Notifications",
-        url: "/notifications",
-        icon: Bell,
-        badge: "notifications",
-      },
       { title: "Board Calendar", url: "/calendar", icon: CalendarDays },
       { title: "My Compliance", url: "/compliance", icon: ShieldCheck },
     ],
@@ -67,13 +61,11 @@ export const NAV_GROUPS: PortalNavGroup[] = [
         title: "Board Packs",
         url: "/board-packs",
         icon: Package,
-        badge: "boardPacks",
       },
       {
         title: "Resolutions",
         url: "/resolutions",
         icon: Vote,
-        badge: "resolutions",
       },
     ],
   },
@@ -95,7 +87,7 @@ export const NAV_GROUPS: PortalNavGroup[] = [
         title: "E-Signing",
         url: "/e-signing",
         icon: PenLine,
-        badge: "eSigning",
+        // badge: "eSigning",
       },
       { title: "Document Vault", url: "/vault", icon: Lock },
     ],
@@ -121,6 +113,13 @@ export const NAV_GROUPS: PortalNavGroup[] = [
   },
   {
     label: "Account",
-    items: [{ title: "Profile & Settings", url: "/settings", icon: Settings }],
+    items: [
+      { title: "Profile & Settings", url: "/settings", icon: Settings },
+      {
+        title: "Notifications",
+        url: "/notifications",
+        icon: Bell,
+      },
+    ],
   },
 ];

@@ -473,6 +473,23 @@ export interface MyMeeting {
     rsvp: "Pending" | "Confirmed" | "Apologies";
     openedAt: string | null;
   } | null;
+  // Board Packs page — this director's own reading progress across the
+  // meeting's boardPack documents, plus every note left on any of them
+  // (shared among attendees and the tenant, not private per-director).
+  myBoardPack: {
+    readFileUrls: string[];
+    allDocumentsRead: boolean;
+    allDocumentsReadAt: string | null;
+  };
+  boardPackNotes: BoardPackNote[];
+}
+
+export interface BoardPackNote {
+  fileUrl: string;
+  authorName: string;
+  authorEmail: string;
+  text: string;
+  createdAt: string;
 }
 
 export const fetchMyMeetings = async (): Promise<MyMeeting[]> => {
@@ -509,6 +526,46 @@ export const submitMeetingAck = async (
   const res = await api.post(`/board-portal/meetings/${meetingId}/ack`, {
     agendaConfirmed,
   });
+  return unwrap(res);
+};
+
+// ── Board Packs page ─────────────────────────────────────────────
+// Mirrors board-portal.controller.ts#toggleBoardPackRead/
+// confirmBoardPackRead/addBoardPackNote — real per-document reading
+// progress and shared notes against a meeting's real boardPack, not a
+// local read-tracking / comment store.
+
+export const toggleBoardPackRead = async (
+  meetingId: string,
+  fileUrl: string,
+  read: boolean,
+): Promise<MyMeeting> => {
+  const res = await api.patch(
+    `/board-portal/meetings/${meetingId}/board-pack/read`,
+    { fileUrl, read },
+  );
+  return unwrap(res);
+};
+
+export const confirmBoardPackRead = async (
+  meetingId: string,
+): Promise<MyMeeting> => {
+  const res = await api.post(
+    `/board-portal/meetings/${meetingId}/board-pack/confirm-read`,
+    {},
+  );
+  return unwrap(res);
+};
+
+export const addBoardPackNote = async (
+  meetingId: string,
+  fileUrl: string,
+  text: string,
+): Promise<MyMeeting> => {
+  const res = await api.post(
+    `/board-portal/meetings/${meetingId}/board-pack/notes`,
+    { fileUrl, text },
+  );
   return unwrap(res);
 };
 

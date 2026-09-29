@@ -49,7 +49,7 @@ export function PortalSidebar() {
         )}
       </div>
 
-      <SidebarContent className="pt-2 sidebar-scroll">
+      <SidebarContent className="sidebar-scroll">
         {NAV_GROUPS.map((group) => (
           <SidebarGroup key={group.label}>
             {!collapsed && <SidebarGroupLabel>{group.label}</SidebarGroupLabel>}
