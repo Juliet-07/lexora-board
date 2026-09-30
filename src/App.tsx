@@ -24,6 +24,7 @@ import Declarations from "@/pages/Declarations";
 import Evaluations from "@/pages/Evaluations";
 import Directory from "@/pages/Directory";
 import BoardCalendar from "./pages/Calendar";
+import Training from "./pages/Training";
 
 const queryClient = new QueryClient();
 
@@ -53,6 +54,7 @@ const BUILT_ROUTES = [
   "/evaluations",
   "/directory",
   "/calendar",
+  "/training",
 ];
 const placeholderRoutes = NAV_GROUPS.flatMap((g) => g.items).filter(
   (i) => !BUILT_ROUTES.includes(i.url),
@@ -101,6 +103,7 @@ const App = () => (
               <Route path="/evaluations" element={<Evaluations />} />
               <Route path="/directory" element={<Directory />} />
               <Route path="/calendar" element={<BoardCalendar />} />
+              <Route path="/training" element={<Training />} />
               {placeholderRoutes.map((i) => (
                 <Route
                   key={i.url}
