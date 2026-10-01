@@ -10,11 +10,15 @@ import {
   Mail,
   Mic,
   Paperclip,
+  ShieldAlert,
   Users2,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -23,6 +27,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -40,8 +51,12 @@ import {
   submitMeetingNoticeRsvp,
   markMeetingNoticeOpened,
   setMyMeetingActionItemStatus,
+  submitMeetingConflict,
   resolveBoardFileUrl,
+  MEETING_CONFLICT_ACTIONS,
   type MyMeeting,
+  type MeetingConflictAction,
+  type MeetingConflictStatus,
 } from "@/lib/board-api";
 
 const shortDate = (value?: string | null) =>
@@ -54,6 +69,38 @@ const shortDate = (value?: string | null) =>
     : "—";
 
 function AttendanceBadge({ meeting }: { meeting: MyMeeting }) {
+  // Per-attendee Present/Proxy/Apology/Absent status when available
+  // (per PO feedback: attendance captures in-person vs proxy), else
+  // fall back to the legacy present/absent boolean for older meetings.
+  if (meeting.myAttendanceStatus) {
+    const status = meeting.myAttendanceStatus;
+    if (status === "Present")
+      return (
+        <Badge className="bg-success/10 text-success hover:bg-success/10">
+          Present
+        </Badge>
+      );
+    if (status === "Proxy")
+      return (
+        <Badge className="bg-info/10 text-info hover:bg-info/10">
+          Present by proxy
+        </Badge>
+      );
+    if (status === "Apology")
+      return (
+        <Badge className="bg-warning/15 text-amber-700 hover:bg-warning/15">
+          Apology
+        </Badge>
+      );
+    return (
+      <Badge
+        variant="outline"
+        className="border-border bg-muted text-muted-foreground hover:bg-muted"
+      >
+        Absent
+      </Badge>
+    );
+  }
   if (meeting.myAttendance === null)
     return (
       <Badge
@@ -77,10 +124,155 @@ function AttendanceBadge({ meeting }: { meeting: MyMeeting }) {
   );
 }
 
+// Shared styling for the four conflict-status values (see board-api.ts)
+// — used both in the past-meetings table and the meeting-detail dialog.
+function conflictStatusBadgeClass(status: MeetingConflictStatus): string {
+  if (status === "Conflict declared — recusal required")
+    return "bg-warning/15 text-amber-700 hover:bg-warning/15";
+  if (status === "Standing declaration — ongoing")
+    return "bg-info/10 text-info hover:bg-info/10";
+  if (status === "No conflict declared")
+    return "bg-muted text-muted-foreground hover:bg-muted";
+  return "bg-success/10 text-success hover:bg-success/10";
+}
+
+function ConflictDialog({
+  meeting,
+  open,
+  onOpenChange,
+}: {
+  meeting: MyMeeting;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const qc = useQueryClient();
+  const [agendaItems, setAgendaItems] = useState<string[]>([]);
+  const [natureOfConflict, setNatureOfConflict] = useState("");
+  const [actionTaken, setActionTaken] = useState<MeetingConflictAction | "">(
+    "",
+  );
+
+  const mut = useMutation({
+    mutationFn: () =>
+      submitMeetingConflict(meeting._id, {
+        agendaItems,
+        natureOfConflict: natureOfConflict.trim(),
+        actionTaken: actionTaken || undefined,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["board-my-meetings"] });
+      toast.success("Conflict of interest declared.");
+      onOpenChange(false);
+      setAgendaItems([]);
+      setNatureOfConflict("");
+      setActionTaken("");
+    },
+    onError: (err: any) =>
+      toast.error(
+        err?.response?.data?.message ??
+          "Failed to declare the conflict of interest.",
+      ),
+  });
+
+  const toggleAgendaItem = (title: string) =>
+    setAgendaItems((prev) =>
+      prev.includes(title) ? prev.filter((t) => t !== title) : [...prev, title],
+    );
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-1.5">
+            <ShieldAlert className="h-4 w-4 text-amber-600" />
+            Declare a conflict of interest
+          </DialogTitle>
+          <DialogDescription>
+            {meeting.title} — {new Date(meeting.date).toLocaleDateString()}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label className="text-xs">Agenda items affected</Label>
+            <div className="mt-1 max-h-32 space-y-1 overflow-y-auto rounded-md border p-2">
+              {meeting.agenda.length === 0 && (
+                <p className="text-[11px] text-muted-foreground">
+                  No agenda items on this meeting.
+                </p>
+              )}
+              {meeting.agenda.map((item, i) => (
+                <label
+                  key={i}
+                  className="flex cursor-pointer items-center gap-2 text-xs"
+                >
+                  <Checkbox
+                    checked={agendaItems.includes(item.title)}
+                    onCheckedChange={() => toggleAgendaItem(item.title)}
+                  />
+                  <span className="truncate">{item.title}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs">Nature of conflict</Label>
+            <Textarea
+              rows={3}
+              className="mt-1"
+              value={natureOfConflict}
+              onChange={(e) => setNatureOfConflict(e.target.value)}
+              placeholder="Describe the interest and how it relates to the agenda…"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Action to be taken</Label>
+            <Select
+              value={actionTaken}
+              onValueChange={(v) => setActionTaken(v as MeetingConflictAction)}
+            >
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder="Select…" />
+              </SelectTrigger>
+              <SelectContent>
+                {MEETING_CONFLICT_ACTIONS.map((a) => (
+                  <SelectItem key={a} value={a}>
+                    {a}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            disabled={mut.isPending}
+            onClick={() => {
+              if (!natureOfConflict.trim()) {
+                toast.error("Describe the nature of the conflict.");
+                return;
+              }
+              mut.mutate();
+            }}
+          >
+            {mut.isPending ? (
+              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+            ) : null}
+            Submit declaration
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function Meetings() {
   const qc = useQueryClient();
   const [ackTarget, setAckTarget] = useState<MyMeeting | null>(null);
   const [minutesTarget, setMinutesTarget] = useState<MyMeeting | null>(null);
+  const [conflictTarget, setConflictTarget] = useState<MyMeeting | null>(null);
 
   const { data: profile } = useQuery({
     queryKey: ["board-my-profile"],
@@ -321,6 +513,7 @@ export default function Meetings() {
                       <TableHead>Meeting</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead>Attendance</TableHead>
+                      <TableHead>Conflict of interest</TableHead>
                       <TableHead>Minutes</TableHead>
                       <TableHead>Your actions</TableHead>
                     </TableRow>
@@ -340,6 +533,26 @@ export default function Meetings() {
                           </TableCell>
                           <TableCell>
                             <AttendanceBadge meeting={m} />
+                          </TableCell>
+                          <TableCell>
+                            {m.myConflict ? (
+                              <Badge
+                                className={conflictStatusBadgeClass(
+                                  m.myConflict.status,
+                                )}
+                              >
+                                {m.myConflict.status}
+                              </Badge>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => setConflictTarget(m)}
+                              >
+                                Declare
+                              </Button>
+                            )}
                           </TableCell>
                           <TableCell>
                             {m.minutesSentAt ? (
@@ -369,7 +582,7 @@ export default function Meetings() {
                     {past.length === 0 && (
                       <TableRow>
                         <TableCell
-                          colSpan={5}
+                          colSpan={6}
                           className="text-center text-muted-foreground"
                         >
                           No past meetings yet.
@@ -623,6 +836,47 @@ export default function Meetings() {
                     <AttendanceBadge meeting={minutesTarget} />
                   </div>
                 </div>
+                <div className="rounded-md border p-3">
+                  <p className="mb-1.5 flex items-center gap-1.5 text-[12.5px] font-bold text-muted-foreground">
+                    <ShieldAlert className="h-3.5 w-3.5" /> Conflict of interest
+                  </p>
+                  {minutesTarget.myConflict ? (
+                    <div className="space-y-1 text-[13px]">
+                      <Badge
+                        className={conflictStatusBadgeClass(
+                          minutesTarget.myConflict.status,
+                        )}
+                      >
+                        {minutesTarget.myConflict.status}
+                      </Badge>
+                      {minutesTarget.myConflict.agendaItems.length > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          Re: {minutesTarget.myConflict.agendaItems.join(", ")}
+                        </p>
+                      )}
+                      <p>{minutesTarget.myConflict.natureOfConflict}</p>
+                      {minutesTarget.myConflict.actionTaken && (
+                        <p className="text-xs text-muted-foreground">
+                          Action: {minutesTarget.myConflict.actionTaken}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <p className="text-[13px] text-muted-foreground">
+                        No conflict declared for this meeting.
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setConflictTarget(minutesTarget)}
+                      >
+                        <ShieldAlert className="mr-1.5 h-3.5 w-3.5" />
+                        Declare conflict of interest
+                      </Button>
+                    </div>
+                  )}
+                </div>
                 <div>
                   <p className="mb-1.5 flex items-center gap-1.5 text-[12.5px] font-bold text-muted-foreground">
                     <Mic className="h-3.5 w-3.5" /> Minutes
@@ -662,6 +916,15 @@ export default function Meetings() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Declare conflict of interest */}
+      {conflictTarget && (
+        <ConflictDialog
+          meeting={conflictTarget}
+          open={!!conflictTarget}
+          onOpenChange={(o) => !o && setConflictTarget(null)}
+        />
+      )}
     </div>
   );
 }

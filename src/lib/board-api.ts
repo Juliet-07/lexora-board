@@ -439,6 +439,46 @@ export interface MyMeetingActionItem {
   completedAt: string | null;
 }
 
+// Per PO feedback (2026-09): attendance is captured as in-person /
+// by proxy / apology / absent, not just present/absent, and a
+// director can declare a conflict of interest from their own portal
+// — mirrors lexora-tenant's governance-api.ts types exactly.
+export type MyMeetingAttendanceStatus =
+  | "Present"
+  | "Proxy"
+  | "Apology"
+  | "Absent";
+// Four values (not a declared/resolved lifecycle) — mirrors
+// lexora-tenant's governance-api.ts exactly. There's no status field
+// in this portal's own dialog (see submitMeetingConflict below); the
+// server infers one of these from the chosen action.
+export type MeetingConflictStatus =
+  | "No conflict declared"
+  | "Conflict declared — recusal required"
+  | "Conflict declared — noted, no recusal"
+  | "Standing declaration — ongoing";
+export type MeetingConflictAction =
+  | "Director to recuse from discussion and vote"
+  | "Director to recuse from vote only (may participate in discussion)"
+  | "Conflict noted in minutes, no recusal required"
+  | "Referred to Nominations Committee for guidance";
+
+export const MEETING_CONFLICT_ACTIONS: MeetingConflictAction[] = [
+  "Director to recuse from discussion and vote",
+  "Director to recuse from vote only (may participate in discussion)",
+  "Conflict noted in minutes, no recusal required",
+  "Referred to Nominations Committee for guidance",
+];
+
+export interface MyMeetingConflict {
+  _id: string;
+  status: MeetingConflictStatus;
+  agendaItems: string[];
+  natureOfConflict: string;
+  actionTaken: MeetingConflictAction | null;
+  recordedAt: string;
+}
+
 export interface MyMeeting {
   _id: string;
   title: string;
@@ -458,6 +498,12 @@ export interface MyMeeting {
   minutesSentAt: string | null;
   // null until attendance has been recorded for this meeting.
   myAttendance: boolean | null;
+  // Per-attendee Present/Proxy/Apology/Absent status — null until the
+  // tenant records attendance for this meeting.
+  myAttendanceStatus: MyMeetingAttendanceStatus | null;
+  // This director's own conflict-of-interest declaration for this
+  // meeting, whether recorded by the tenant or self-declared here.
+  myConflict: MyMeetingConflict | null;
   myAck: { agendaConfirmed: boolean; confirmedAt: string } | null;
   // This director's own action items only, never the full meeting list.
   actionItems: MyMeetingActionItem[];
@@ -526,6 +572,29 @@ export const submitMeetingAck = async (
   const res = await api.post(`/board-portal/meetings/${meetingId}/ack`, {
     agendaConfirmed,
   });
+  return unwrap(res);
+};
+
+// Declare a conflict of interest for this meeting, from the
+// director's own portal (per PO feedback: "A board member should
+// also be able declare conflict of interest from their portal").
+// There is no status field here — the server infers one of the four
+// MeetingConflictStatus values from the chosen action (a recusal
+// action implies recusal is required, "noted" implies it isn't).
+// "Standing declaration — ongoing" is tenant-only: that classification
+// is left to the Company Secretary, not self-selected by the director.
+export const submitMeetingConflict = async (
+  meetingId: string,
+  dto: {
+    agendaItems?: string[];
+    natureOfConflict: string;
+    actionTaken?: MeetingConflictAction;
+  },
+): Promise<MyMeeting> => {
+  const res = await api.post(
+    `/board-portal/meetings/${meetingId}/conflicts`,
+    dto,
+  );
   return unwrap(res);
 };
 
@@ -647,5 +716,83 @@ export interface MyDashboard {
 
 export const fetchMyDashboard = async (): Promise<MyDashboard> => {
   const res = await api.get("/board-portal/dashboard");
+  return unwrap(res);
+};
+
+// ══════════════════════════════════════════════════════════════
+// Trainings — general, ongoing board training (distinct from the
+// onboarding-only training step above). Per PO feedback: the tenant
+// creates trainings with optional material, the director reviews it
+// and marks complete, or — when there is no material — uploads their
+// own proof of completion (certificate/screenshot) instead; the
+// tenant can then access that proof on their end. Mirrors
+// lexora-tenant's governance-api.ts Training section exactly.
+// ══════════════════════════════════════════════════════════════
+
+export type TrainingCategory =
+  | "Governance"
+  | "Regulatory"
+  | "Risk"
+  | "ESG"
+  | "Cyber"
+  | "Finance"
+  | "Ethics"
+  | "Other";
+export type TrainingFormat = "In-person" | "Online" | "Self-paced";
+export type TrainingCompletionMethod =
+  | "Material reviewed"
+  | "Proof of completion uploaded";
+
+export interface TrainingCompletion {
+  boardMemberId: string | null;
+  name: string;
+  email: string;
+  completedAt: string;
+  method: TrainingCompletionMethod;
+  proofFileUrl: string | null;
+  proofMimeType: string | null;
+  proofName: string | null;
+}
+
+export interface MyTraining {
+  _id: string;
+  title: string;
+  description: string;
+  category: TrainingCategory;
+  provider: string;
+  format: TrainingFormat;
+  cpdHours: number;
+  dueDate: string | null;
+  mandatory: boolean;
+  assignedTo: string[];
+  resourceUrl: string | null;
+  resourceMimeType: string | null;
+  resourceName: string | null;
+  completions: TrainingCompletion[];
+  createdAt: string;
+  // This director's own completion entry, if any — resolved
+  // server-side, never derived client-side from the full list.
+  myCompletion: TrainingCompletion | null;
+}
+
+export const fetchMyTrainings = async (): Promise<MyTraining[]> => {
+  const res = await api.get("/board-portal/trainings");
+  const d = unwrap(res);
+  return Array.isArray(d) ? d : [];
+};
+
+// file is required when the training has no resourceUrl of its own
+// (enforced server-side too) — it becomes the uploaded proof of
+// completion (a PDF or image certificate, say).
+export const completeTraining = async (
+  trainingId: string,
+  file?: File,
+): Promise<MyTraining> => {
+  const form = new FormData();
+  if (file) form.append("file", file);
+  const res = await api.post(
+    `/board-portal/trainings/${trainingId}/complete`,
+    form,
+  );
   return unwrap(res);
 };
