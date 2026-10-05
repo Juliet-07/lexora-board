@@ -305,6 +305,57 @@ export const decideGovernanceCode = async (
 };
 
 // ══════════════════════════════════════════════════════════════
+// ESG disclosure approvals — the Board Chair's own docket, per
+// esg-board-portal.controller.ts#getPending/decide. Only ever listed
+// here once the ESG Committee Chair (who signs externally by email)
+// has already approved — the backend hard-gates this, this is just
+// the matching display: "one cannot sign if the other hasn't".
+// ══════════════════════════════════════════════════════════════
+
+export type EsgApprovalDecision = "Pending" | "Approved" | "Declined";
+
+export interface IndicatorEvidence {
+  _id?: string;
+  name: string;
+  fileUrl: string | null;
+  mimeType: string | null;
+  size: number;
+}
+
+export interface PendingEsgApproval {
+  id: string;
+  code: string;
+  title: string;
+  requirement: string;
+  response: string;
+  evidence: IndicatorEvidence[];
+  frameworkLabel: string;
+  esgChairDecidedAt: string | null;
+  esgChairName: string;
+  myDecision: EsgApprovalDecision;
+  myNotes: string;
+  myDecidedAt: string | null;
+}
+
+export const fetchEsgApprovals = async (): Promise<PendingEsgApproval[]> => {
+  const res = await api.get("/board-portal/esg-approvals");
+  const d = unwrap(res);
+  return Array.isArray(d) ? d : [];
+};
+
+export const decideEsgApproval = async (
+  id: string,
+  decision: "Approved" | "Declined",
+  notes?: string,
+): Promise<{ status: string }> => {
+  const res = await api.post(`/board-portal/esg-approvals/${id}/decide`, {
+    decision,
+    notes,
+  });
+  return unwrap(res);
+};
+
+// ══════════════════════════════════════════════════════════════
 // My Committees — the committees this director belongs to, per
 // board-portal.controller.ts#getMyCommittees /
 // committee.service.ts#getForBoardMemberPortal. Membership itself is
