@@ -4,7 +4,6 @@ import {
   CalendarDays,
   ShieldCheck,
   Rocket,
-  DoorOpen,
   Building2,
   Package,
   Vote,
@@ -48,10 +47,7 @@ export const NAV_GROUPS: PortalNavGroup[] = [
   },
   {
     label: "Onboarding",
-    items: [
-      { title: "My Onboarding", url: "/onboarding", icon: Rocket },
-      { title: "Offboarding", url: "/offboarding", icon: DoorOpen },
-    ],
+    items: [{ title: "My Onboarding", url: "/onboarding", icon: Rocket }],
   },
   {
     label: "Meetings & Packs",

@@ -26,7 +26,6 @@ import Directory from "@/pages/Directory";
 import BoardCalendar from "./pages/Calendar";
 import Training from "./pages/Training";
 import Compliance from "@/pages/Compliance";
-import OffboardingPage from "@/pages/Offboarding";
 import Resolutions from "@/pages/Resolutions";
 import ESigning from "@/pages/ESigning";
 import Vault from "@/pages/Vault";
@@ -35,6 +34,7 @@ import Newsletters from "@/pages/Newsletters";
 import Notifications from "@/pages/Notifications";
 import Messages from "@/pages/Messages";
 import SettingsPage from "@/pages/Settings";
+import SkillsMatrix from "./pages/SkillsMatrix";
 
 const queryClient = new QueryClient();
 
@@ -66,7 +66,6 @@ const BUILT_ROUTES = [
   "/calendar",
   "/training",
   "/compliance",
-  "/offboarding",
   "/resolutions",
   "/e-signing",
   "/vault",
@@ -75,6 +74,7 @@ const BUILT_ROUTES = [
   "/notifications",
   "/messages",
   "/settings",
+  "/skills-matrix",
 ];
 const placeholderRoutes = NAV_GROUPS.flatMap((g) => g.items).filter(
   (i) => !BUILT_ROUTES.includes(i.url),
@@ -125,11 +125,11 @@ const App = () => (
               <Route path="/calendar" element={<BoardCalendar />} />
               <Route path="/training" element={<Training />} />
               <Route path="/compliance" element={<Compliance />} />
-              <Route path="/offboarding" element={<OffboardingPage />} />
               <Route path="/resolutions" element={<Resolutions />} />
               <Route path="/e-signing" element={<ESigning />} />
               <Route path="/vault" element={<Vault />} />
               <Route path="/payments" element={<Payments />} />
+              <Route path="/skills-matrix" element={<SkillsMatrix />} />
               <Route path="/newsletters" element={<Newsletters />} />
               <Route path="/notifications" element={<Notifications />} />
               <Route path="/messages" element={<Messages />} />
