@@ -708,9 +708,12 @@ export default function Meetings() {
                     <p className="mb-1.5 flex items-center gap-1.5 text-[12.5px] font-bold text-muted-foreground">
                       <Mail className="h-3.5 w-3.5" /> Notice
                     </p>
-                    <p className="whitespace-pre-wrap text-[13px]">
-                      {minutesTarget.notice.body}
-                    </p>
+                    <div
+                      className="text-[13px] prose prose-sm max-w-none [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
+                      dangerouslySetInnerHTML={{
+                        __html: minutesTarget.notice.body,
+                      }}
+                    />
                     {minutesTarget.notice.rsvpDeadline && (
                       <p className="mt-1.5 text-[11px] text-amber-700">
                         RSVP by {shortDate(minutesTarget.notice.rsvpDeadline)}
