@@ -5,11 +5,17 @@ import {
   Routes,
   useLocation,
 } from "react-router-dom";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+} from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { PortalLayout } from "@/components/layout/PortalLayout";
+import { fetchMyOnboarding } from "@/lib/board-api";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import Onboarding from "@/pages/Onboarding";
@@ -49,6 +55,38 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 function GuestOnly({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   if (user) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}
+
+// Confines a board member to /onboarding until their 5-stage
+// onboarding is actually complete — mirrors the real source of truth
+// the backend itself graduates on (BoardMember.lifecycleStatus flips
+// Onboarding → Active once every checklist item is done, see
+// BoardMemberService#applyOnboardingGraduation), not a client-side
+// recomputation of the stages. Shares the "my-onboarding" query key
+// with Onboarding.tsx, so this costs no extra request once that page
+// has loaded, and a submission there (which updates the same cache
+// key) unlocks the rest of the portal immediately, no refetch needed.
+function RequireOnboarding({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
+  const { data, isLoading } = useQuery({
+    queryKey: ["my-onboarding"],
+    queryFn: fetchMyOnboarding,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center gap-2 text-muted-foreground">
+        <Loader2 className="h-5 w-5 animate-spin" />
+        <span className="text-sm">Loading your portal…</span>
+      </div>
+    );
+  }
+
+  const onboardingComplete = data?.lifecycleStatus === "Active";
+  if (!onboardingComplete && location.pathname !== "/onboarding") {
+    return <Navigate to="/onboarding" replace />;
+  }
   return <>{children}</>;
 }
 
@@ -106,7 +144,9 @@ const App = () => (
             <Route
               element={
                 <RequireAuth>
-                  <PortalLayout />
+                  <RequireOnboarding>
+                    <PortalLayout />
+                  </RequireOnboarding>
                 </RequireAuth>
               }
             >
