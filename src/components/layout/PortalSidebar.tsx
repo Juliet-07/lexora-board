@@ -13,13 +13,14 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/contexts/AuthContext";
-import { navBadges } from "@/data/boardMockData";
+import { useBoardBadges } from "@/hooks/use-boardBadges";
 import { NAV_GROUPS } from "./nav";
 
 export function PortalSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const { user, logout } = useAuth();
+  const navBadges = useBoardBadges();
 
   return (
     <Sidebar collapsible="icon">

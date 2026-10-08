@@ -10,6 +10,7 @@ import {
   fetchMyProfile,
   type BoardPortalUser,
 } from "@/lib/board-api";
+import { disconnectRealtimeSocket } from "@/lib/realtime-api";
 
 // Real auth — signs in against POST /api/auth/login (the same
 // generic Lexora auth endpoint the tenant app and client portal use;
@@ -114,6 +115,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       /* ignore */
     }
+    disconnectRealtimeSocket();
     setUser(null);
   }, []);
 

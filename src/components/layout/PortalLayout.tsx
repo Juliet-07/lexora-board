@@ -6,12 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/contexts/AuthContext";
-import { navBadges } from "@/data/boardMockData";
+import { useBoardBadges } from "@/hooks/use-boardBadges";
 import { PortalSidebar } from "./PortalSidebar";
 
 export function PortalLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const navBadges = useBoardBadges();
 
   return (
     <SidebarProvider>
@@ -41,9 +42,11 @@ export function PortalLayout() {
                 title="Notifications"
               >
                 <Bell className="h-4 w-4" />
-                <span className="absolute -top-0.5 -right-0.5 rounded-full bg-destructive px-1 text-[9px] font-bold leading-4 text-destructive-foreground">
-                  {navBadges.notifications}
-                </span>
+                {navBadges.notifications > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 rounded-full bg-destructive px-1 text-[9px] font-bold leading-4 text-destructive-foreground">
+                    {navBadges.notifications}
+                  </span>
+                )}
               </Button>
               <div className="flex items-center gap-2">
                 <Avatar className="h-8 w-8">

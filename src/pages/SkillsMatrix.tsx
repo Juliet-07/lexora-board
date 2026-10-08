@@ -1,11 +1,20 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { TrendingUp } from "lucide-react";
+import { Plus, Trash2, TrendingUp } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -24,273 +33,330 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import {
-  skillCompetencies as initialCompetencies,
-  skillsDirectors,
-  skillsGapAnalysis,
-  skillsSelfAssessment,
-  RATING_LABELS,
-  type CoverageLevel,
-} from "@/data/skillsMatrixMockData";
+  fetchSkillsMatrix,
+  addMySkill,
+  removeMySkill,
+  type SkillCategory,
+  type SkillLevel,
+} from "@/lib/board-api";
 
-const ME = "dir3";
+const CATEGORIES: SkillCategory[] = [
+  "Finance",
+  "Legal",
+  "Risk",
+  "Strategy",
+  "Technology",
+  "Governance",
+  "Industry",
+  "Other",
+];
+const LEVELS: SkillLevel[] = ["Basic", "Intermediate", "Expert"];
 
-const CELL_CLASS: Record<number, string> = {
-  1: "bg-destructive/10 text-destructive",
-  2: "bg-warning/15 text-amber-700",
-  3: "bg-success/10 text-success",
-  4: "bg-primary/10 text-primary",
+const LEVEL_RANK: Record<SkillLevel, number> = {
+  Basic: 1,
+  Intermediate: 2,
+  Expert: 3,
+};
+const LEVEL_CLASS: Record<SkillLevel, string> = {
+  Basic: "bg-muted text-muted-foreground",
+  Intermediate: "bg-warning/15 text-amber-700",
+  Expert: "bg-success/10 text-success",
 };
 
-function SkillCell({ value }: { value: number }) {
-  return (
-    <div
-      className={cn(
-        "mx-auto flex h-8 w-8 items-center justify-center rounded-md text-xs font-bold",
-        CELL_CLASS[value] ?? "bg-muted text-muted-foreground",
-      )}
-    >
-      {value}
-    </div>
-  );
-}
-
-function coverageBadge(level: CoverageLevel) {
-  switch (level) {
-    case "strong":
-      return (
-        <Badge className="bg-success/10 text-success hover:bg-success/10">
-          Strong
-        </Badge>
-      );
-    case "developing":
-      return (
-        <Badge className="bg-warning/15 text-amber-700 hover:bg-warning/15">
-          Developing
-        </Badge>
-      );
-    case "gap":
-      return (
-        <Badge className="bg-destructive/10 text-destructive hover:bg-destructive/10">
-          Gap
-        </Badge>
-      );
-  }
-}
-
-function RatingPicker({
-  value,
-  onChange,
-}: {
-  value: number;
-  onChange: (v: number) => void;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      {[1, 2, 3, 4].map((n) => (
-        <button
-          key={n}
-          type="button"
-          title={RATING_LABELS[n - 1]}
-          onClick={() => onChange(n)}
-          className={cn(
-            "flex h-8 w-8 items-center justify-center rounded-full border text-xs font-semibold transition-colors",
-            value === n
-              ? "border-primary bg-primary text-primary-foreground"
-              : "border-border bg-card text-muted-foreground hover:border-primary/50",
-          )}
-        >
-          {n}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 export default function SkillsMatrix() {
-  const [competencies, setCompetencies] = useState(initialCompetencies);
-  const [lastUpdated, setLastUpdated] = useState(
-    skillsSelfAssessment.lastUpdated,
-  );
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<Record<string, number>>(() =>
-    Object.fromEntries(initialCompetencies.map((c) => [c.id, c.ratings[ME]])),
-  );
-  const [extraSkills, setExtraSkills] = useState("");
-  const [developmentAreas, setDevelopmentAreas] = useState("");
+  const [form, setForm] = useState({
+    name: "",
+    category: "Governance" as SkillCategory,
+    level: "Intermediate" as SkillLevel,
+    yearsExperience: 1,
+    qualified: true,
+    notes: "",
+  });
 
-  const submitAssessment = () => {
-    const unrated = competencies.filter((c) => !draft[c.id]);
-    if (unrated.length > 0) {
-      toast(`Rate all ${competencies.length} competencies first.`, {
-        description: `${competencies.length - unrated.length}/${competencies.length} rated so far.`,
+  const { data, isLoading } = useQuery({
+    queryKey: ["board-skills-matrix"],
+    queryFn: fetchSkillsMatrix,
+  });
+  const rows = data ?? [];
+
+  const addMut = useMutation({
+    mutationFn: addMySkill,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["board-skills-matrix"] });
+      toast.success("Skill added to the matrix.");
+      setOpen(false);
+      setForm({
+        name: "",
+        category: "Governance",
+        level: "Intermediate",
+        yearsExperience: 1,
+        qualified: true,
+        notes: "",
       });
+    },
+    onError: () => toast.error("Failed to add skill."),
+  });
+
+  const removeMut = useMutation({
+    mutationFn: removeMySkill,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["board-skills-matrix"] });
+      toast.success("Skill removed.");
+    },
+    onError: () =>
+      toast.error(
+        "Could not remove that skill — you can only withdraw one you submitted yourself.",
+      ),
+  });
+
+  // Best level recorded for each director × category, derived client
+  // side from the real BoardSkill[] every director already has, plus
+  // a board-wide coverage read (how many directors have at least one
+  // qualified skill in that category) — the same idea as the tenant's
+  // own aggregate "Board skills matrix" card, just per-director here.
+  const cellFor = (
+    skills: {
+      category: SkillCategory;
+      level: SkillLevel;
+      qualified: boolean;
+    }[],
+    category: SkillCategory,
+  ) => {
+    const matches = skills.filter((s) => s.category === category);
+    if (matches.length === 0) return null;
+    const best = matches.reduce((a, b) =>
+      LEVEL_RANK[b.level] > LEVEL_RANK[a.level] ? b : a,
+    );
+    return { level: best.level, count: matches.length };
+  };
+
+  const coverageFor = (category: SkillCategory) =>
+    rows.filter((r) =>
+      r.skills.some((s) => s.category === category && s.qualified),
+    ).length;
+
+  const mySkills = useMemo(
+    () =>
+      rows.flatMap((r, ri) =>
+        r.skills
+          .map((s, si) => ({ ...s, rowIndex: ri, skillIndex: si }))
+          .filter((s) => s.addedBy === "Self"),
+      ),
+    [rows],
+  );
+
+  const submit = () => {
+    if (!form.name.trim()) {
+      toast("Skill name required.");
       return;
     }
-    setCompetencies((cs) =>
-      cs.map((c) => ({ ...c, ratings: { ...c.ratings, [ME]: draft[c.id] } })),
-    );
-    setLastUpdated(
-      new Date().toLocaleDateString("en-GB", {
-        day: "2-digit",
-        month: "long",
-        year: "numeric",
-      }),
-    );
-    toast.success("Skills self-assessment submitted.");
-    setOpen(false);
+    addMut.mutate({
+      ...form,
+      name: form.name.trim(),
+      notes: form.notes.trim(),
+    });
   };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">
-          Board Skills Matrix
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          The skills matrix maps collective board competencies against strategic
-          needs. Update your self-assessment annually.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">
+            Board Skills Matrix
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Every director's recorded skills and credentials. Submit one of your
+            own if the tenant hasn't recorded it yet.
+          </p>
+        </div>
+        <Button size="sm" onClick={() => setOpen(true)}>
+          <Plus className="mr-1.5 h-4 w-4" /> Submit a skill
+        </Button>
       </div>
-
-      <Card className="border-l-4 border-l-accent">
-        <CardContent className="space-y-3.5 p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-bold">Your skills self-assessment</p>
-              <p className="text-xs text-muted-foreground">
-                Last updated: {lastUpdated} · Annual update due:{" "}
-                {skillsSelfAssessment.dueDate}
-              </p>
-            </div>
-            <Button size="sm" onClick={() => setOpen(true)}>
-              Update my skills
-            </Button>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span>Rate your proficiency:</span>
-            {RATING_LABELS.map((label, i) => (
-              <span key={label} className="inline-flex items-center gap-1.5">
-                <span
-                  className={cn(
-                    "flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold",
-                    CELL_CLASS[i + 1],
-                  )}
-                >
-                  {i + 1}
-                </span>
-                {label}
-              </span>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
 
       <Card>
         <CardContent className="p-5">
-          <p className="mb-3 text-sm font-bold">
-            Board skills matrix (aggregate)
-          </p>
-          <div className="overflow-x-auto">
-            <Table className="min-w-[820px]">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="min-w-[180px]">
-                    Skill / Competency
-                  </TableHead>
-                  {skillsDirectors.map((d) => (
-                    <TableHead key={d.id} className="text-center">
-                      {d.shortLabel}
-                      {d.roleTag && (
+          <p className="mb-3 text-sm font-bold">Skills matrix</p>
+          {isLoading ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              Loading…
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table className="min-w-[820px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="min-w-[140px]">Category</TableHead>
+                    {rows.map((r) => (
+                      <TableHead key={r.boardMemberId} className="text-center">
+                        {r.name}
                         <span className="block text-[10px] font-normal text-muted-foreground">
-                          {d.isYou ? "(You)" : d.roleTag}
+                          {r.role}
                         </span>
-                      )}
-                    </TableHead>
-                  ))}
-                  <TableHead className="text-center">Board Coverage</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {competencies.map((c) => (
-                  <TableRow key={c.id}>
-                    <TableCell className="whitespace-nowrap font-semibold">
-                      {c.label}
-                    </TableCell>
-                    {skillsDirectors.map((d) => (
-                      <TableCell key={d.id} className="text-center">
-                        <SkillCell value={c.ratings[d.id]} />
-                      </TableCell>
+                      </TableHead>
                     ))}
-                    <TableCell className="text-center">
-                      {coverageBadge(c.coverage)}
-                    </TableCell>
+                    <TableHead className="text-center">Coverage</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {CATEGORIES.map((cat) => (
+                    <TableRow key={cat}>
+                      <TableCell className="whitespace-nowrap font-semibold">
+                        {cat}
+                      </TableCell>
+                      {rows.map((r) => {
+                        const cell = cellFor(r.skills, cat);
+                        return (
+                          <TableCell
+                            key={r.boardMemberId}
+                            className="text-center"
+                          >
+                            {cell ? (
+                              <div
+                                title={r.skills
+                                  .filter((s) => s.category === cat)
+                                  .map((s) => `${s.name} (${s.level})`)
+                                  .join(", ")}
+                                className={cn(
+                                  "mx-auto flex h-8 min-w-8 items-center justify-center rounded-md px-1.5 text-[10px] font-bold",
+                                  LEVEL_CLASS[cell.level],
+                                )}
+                              >
+                                {cell.level}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                        );
+                      })}
+                      <TableCell className="text-center">
+                        <Badge variant="outline">
+                          {coverageFor(cat)}/{rows.length}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
 
       <Card>
         <CardContent className="space-y-2 p-5">
           <p className="flex items-center gap-1.5 text-sm font-bold">
-            <TrendingUp className="h-4 w-4" /> Skills gap analysis
+            <TrendingUp className="h-4 w-4" /> My submitted skills
           </p>
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            <span className="font-semibold text-destructive">
-              {skillsGapAnalysis.critical.heading}
-            </span>{" "}
-            {skillsGapAnalysis.critical.body}
-          </p>
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            <span className="font-semibold text-amber-700">
-              {skillsGapAnalysis.developing.heading}
-            </span>{" "}
-            {skillsGapAnalysis.developing.body}
-          </p>
+          {mySkills.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              You haven't submitted any skills of your own yet — use "Submit a
+              skill" above if the tenant hasn't recorded one of yours.
+            </p>
+          ) : (
+            <div className="space-y-1.5">
+              {mySkills.map((s) => (
+                <div
+                  key={`${s.rowIndex}-${s.skillIndex}`}
+                  className="flex items-start justify-between gap-2 rounded border px-2.5 py-1.5"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{s.name}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {s.category} · {s.level} · {s.yearsExperience} yr(s)
+                    </p>
+                  </div>
+                  <button onClick={() => removeMut.mutate(s.skillIndex)}>
+                    <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Update your skills self-assessment</DialogTitle>
+            <DialogTitle>Submit a skill</DialogTitle>
             <DialogDescription>
-              Rate your proficiency in each competency area: 1 = Awareness, 2 =
-              Working knowledge, 3 = Skilled, 4 = Expert. Your assessment feeds
-              into the board skills matrix and helps identify development needs.
+              Shows immediately on the board's skills matrix, tagged as
+              self-submitted.
             </DialogDescription>
           </DialogHeader>
-          <div className="max-h-[55vh] space-y-4 overflow-y-auto pr-1">
-            <div>
-              {competencies.map((c) => (
-                <div
-                  key={c.id}
-                  className="flex items-center justify-between gap-4 border-b py-3 last:border-b-0"
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Skill / credential</Label>
+              <Input
+                placeholder="e.g. Cybersecurity oversight, CPA, MBA Finance"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Category</Label>
+                <Select
+                  value={form.category}
+                  onValueChange={(v) =>
+                    setForm({ ...form, category: v as SkillCategory })
+                  }
                 >
-                  <p className="text-sm font-medium">{c.label}</p>
-                  <RatingPicker
-                    value={draft[c.id] ?? 0}
-                    onChange={(v) => setDraft((d) => ({ ...d, [c.id]: v }))}
-                  />
-                </div>
-              ))}
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CATEGORIES.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Level</Label>
+                <Select
+                  value={form.level}
+                  onValueChange={(v) =>
+                    setForm({ ...form, level: v as SkillLevel })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LEVELS.map((l) => (
+                      <SelectItem key={l} value={l}>
+                        {l}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Additional skills or qualifications to note</Label>
-              <Textarea
-                value={extraSkills}
-                onChange={(e) => setExtraSkills(e.target.value)}
-                placeholder="Any certifications, specialist expertise, or skills not listed above..."
+              <Label>Years of experience</Label>
+              <Input
+                type="number"
+                min={0}
+                value={form.yearsExperience}
+                onChange={(e) =>
+                  setForm({ ...form, yearsExperience: Number(e.target.value) })
+                }
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Development areas you would like training in</Label>
+              <Label>Notes (optional)</Label>
               <Textarea
-                value={developmentAreas}
-                onChange={(e) => setDevelopmentAreas(e.target.value)}
-                placeholder="E.g., Cybersecurity oversight, ESG reporting..."
+                rows={2}
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                placeholder="Institution, year, remarks…"
               />
             </div>
           </div>
@@ -298,7 +364,9 @@ export default function SkillsMatrix() {
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={submitAssessment}>Submit assessment</Button>
+            <Button onClick={submit} disabled={addMut.isPending}>
+              Submit
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

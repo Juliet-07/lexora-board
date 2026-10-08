@@ -189,11 +189,14 @@ export interface MyOnboarding {
   };
 }
 
-export const fetchMyProfile = async (): Promise<{
+export interface MyBoardProfile {
   id: string;
   name: string;
   role: string;
   email: string;
+  // Lives only on the User doc backend-side — see
+  // BoardMemberService#getMyProfile.
+  phone: string;
   appointedAt: string;
   termEnds: string;
   lifecycleStatus: BoardMemberLifecycleStatus;
@@ -205,8 +208,35 @@ export const fetchMyProfile = async (): Promise<{
   // of the platform's own name ("Lexora Africa") in onboarding questions
   // and declaration text, since the director is declaring to this tenant.
   tenantCompanyName: string;
-}> => {
+}
+
+export const fetchMyProfile = async (): Promise<MyBoardProfile> => {
   const res = await api.get("/board-portal/me");
+  return unwrap(res);
+};
+
+// ══════════════════════════════════════════════════════════════
+// Profile & Settings — "edit their own details, like phone number
+// and email" (PO, Oct 2026). Password changes reuse the platform's
+// existing /auth/change-password endpoint directly (it already works
+// for every signed-in user type, board members included) rather than
+// a board-portal-specific route.
+// ══════════════════════════════════════════════════════════════
+
+export const updateMyProfile = async (dto: {
+  phone?: string;
+  email?: string;
+}): Promise<MyBoardProfile> => {
+  const res = await api.patch("/board-portal/me", dto);
+  return unwrap(res);
+};
+
+export const changeMyPassword = async (dto: {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+}): Promise<{ message?: string }> => {
+  const res = await api.patch("/auth/change-password", dto);
   return unwrap(res);
 };
 
@@ -899,5 +929,197 @@ export const completeTraining = async (
     `/board-portal/trainings/${trainingId}/complete`,
     form,
   );
+  return unwrap(res);
+};
+
+// ══════════════════════════════════════════════════════════════
+// Board Directory — "board members are able to see other board
+// members and message them" (PO, Oct 2026). Per
+// board-member.service.ts#getDirectoryForPortal.
+// ══════════════════════════════════════════════════════════════
+
+export interface DirectoryEntry {
+  id: string;
+  name: string;
+  role: string;
+  email: string;
+  bio: string;
+  appointedAt: string;
+  termEnds: string;
+  lifecycleStatus: BoardMemberLifecycleStatus;
+  attendancePercentage: number;
+  committees: string[];
+  isYou: boolean;
+}
+
+export const fetchDirectory = async (): Promise<DirectoryEntry[]> => {
+  const res = await api.get("/board-portal/directory");
+  const d = unwrap(res);
+  return Array.isArray(d) ? d : [];
+};
+
+// ══════════════════════════════════════════════════════════════
+// Messaging — a direct thread with one other director. A "thread" is
+// derived server-side (see board-messaging.service.ts), never a
+// separate document to create first.
+// ══════════════════════════════════════════════════════════════
+
+export interface MessageThread {
+  counterpartId: string;
+  name: string;
+  role: string;
+  lastMessage: string;
+  lastAt: string;
+  unreadCount: number;
+}
+
+export interface BoardMessageItem {
+  id: string;
+  body: string;
+  fromMe: boolean;
+  createdAt: string;
+  // Only present on a message that just arrived live over the socket
+  // (see useRealtimeEvent("message:new", …) in Messages.tsx) — not
+  // part of the REST history shape.
+  fromName?: string;
+  fromBoardMemberId?: string;
+}
+
+export const fetchMessageThreads = async (): Promise<MessageThread[]> => {
+  const res = await api.get("/board-portal/messages/threads");
+  const d = unwrap(res);
+  return Array.isArray(d) ? d : [];
+};
+
+export const fetchMessageThread = async (
+  counterpartId: string,
+): Promise<BoardMessageItem[]> => {
+  const res = await api.get(`/board-portal/messages/${counterpartId}`);
+  const d = unwrap(res);
+  return Array.isArray(d) ? d : [];
+};
+
+export const sendBoardMessage = async (
+  counterpartId: string,
+  body: string,
+): Promise<BoardMessageItem> => {
+  const res = await api.post(`/board-portal/messages/${counterpartId}`, {
+    body,
+  });
+  return unwrap(res);
+};
+
+// ══════════════════════════════════════════════════════════════
+// Skills Matrix — view every director's recorded skills, and submit
+// one of your own when the tenant hasn't recorded it yet. Reuses the
+// exact same BoardSkill shape the tenant's own Board Mgt matrix
+// reads/writes (board-member.schema.ts) — one shared collection.
+// ══════════════════════════════════════════════════════════════
+
+export type SkillCategory =
+  | "Finance"
+  | "Legal"
+  | "Risk"
+  | "Strategy"
+  | "Technology"
+  | "Governance"
+  | "Industry"
+  | "Other";
+export type SkillLevel = "Basic" | "Intermediate" | "Expert";
+export type SkillAddedBy = "Tenant" | "Self";
+
+export interface BoardSkillEntry {
+  name: string;
+  category: SkillCategory;
+  level: SkillLevel;
+  yearsExperience: number;
+  qualified: boolean;
+  notes: string;
+  addedBy: SkillAddedBy;
+}
+
+export interface SkillsMatrixRow {
+  boardMemberId: string;
+  name: string;
+  role: string;
+  skills: BoardSkillEntry[];
+}
+
+export const fetchSkillsMatrix = async (): Promise<SkillsMatrixRow[]> => {
+  const res = await api.get("/board-portal/skills-matrix");
+  const d = unwrap(res);
+  return Array.isArray(d) ? d : [];
+};
+
+export const addMySkill = async (dto: {
+  name: string;
+  category: SkillCategory;
+  level: SkillLevel;
+  yearsExperience?: number;
+  qualified?: boolean;
+  notes?: string;
+}): Promise<BoardSkillEntry[]> => {
+  const res = await api.post("/board-portal/skills", dto);
+  return unwrap(res);
+};
+
+export const removeMySkill = async (
+  index: number,
+): Promise<BoardSkillEntry[]> => {
+  const res = await api.delete(`/board-portal/skills/${index}`);
+  return unwrap(res);
+};
+
+// ══════════════════════════════════════════════════════════════
+// Notifications — functional and real-time (see src/lib/realtime.ts
+// for the live socket push; these are the REST list/read actions).
+// ══════════════════════════════════════════════════════════════
+
+export type BoardNotificationType =
+  | "Meeting"
+  | "Minutes"
+  | "Governance Code"
+  | "ESG"
+  | "Message"
+  | "Training"
+  | "General";
+
+export interface BoardNotificationItem {
+  _id: string;
+  type: BoardNotificationType;
+  title: string;
+  description: string;
+  link: string | null;
+  read: boolean;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export const fetchMyNotifications = async (): Promise<
+  BoardNotificationItem[]
+> => {
+  const res = await api.get("/board-portal/notifications");
+  const d = unwrap(res);
+  return Array.isArray(d) ? d : [];
+};
+
+export const fetchUnreadNotificationCount = async (): Promise<{
+  count: number;
+}> => {
+  const res = await api.get("/board-portal/notifications/unread-count");
+  return unwrap(res);
+};
+
+export const markNotificationRead = async (
+  id: string,
+): Promise<BoardNotificationItem> => {
+  const res = await api.post(`/board-portal/notifications/${id}/read`);
+  return unwrap(res);
+};
+
+export const markAllNotificationsRead = async (): Promise<{
+  marked: boolean;
+}> => {
+  const res = await api.post("/board-portal/notifications/mark-all-read");
   return unwrap(res);
 };
