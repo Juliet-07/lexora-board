@@ -579,7 +579,36 @@ export interface MyMeeting {
     allDocumentsReadAt: string | null;
   };
   boardPackNotes: BoardPackNote[];
+  // Minutes chair-review / adoption workflow (PO feedback, Oct 2026).
+  // Board/Committee chairs review and every attendee adopts in-app,
+  // since they're real board members — see
+  // MeetingService#resolveChairForReview/getForBoardMemberPortal.
+  minutesDraftStatus: MinutesDraftStatus | null;
+  // Only populated for the director actually resolved as this
+  // meeting's Chair — everyone else sees null here.
+  myChairReview: {
+    decision: "Pending" | "Approved" | "Changes requested";
+    notes: string;
+    requestedAt: string | null;
+    decidedAt: string | null;
+    pdfUrl: string | null;
+  } | null;
+  // This director's own adoption decision, once they've adopted.
+  myBoardAdoption: {
+    decision: "approved" | "changes-requested";
+    submittedAt: string;
+  } | null;
+  // Whether this director can adopt right now (minutes tabled for
+  // adoption and not already adopted by them).
+  canAdoptMinutes: boolean;
 }
+
+export type MinutesDraftStatus =
+  | "Draft"
+  | "Sent for Chair review"
+  | "Chair approved"
+  | "Tabled for adoption"
+  | "Adopted and signed";
 
 export interface BoardPackNote {
   fileUrl: string;
@@ -623,6 +652,31 @@ export const submitMeetingAck = async (
   const res = await api.post(`/board-portal/meetings/${meetingId}/ack`, {
     agendaConfirmed,
   });
+  return unwrap(res);
+};
+
+// This director's own decision as Chair on a minutes chair-review
+// request — approving auto-advances the minutes to "Chair approved".
+export const decideMinutesChairReview = async (
+  meetingId: string,
+  dto: { decision: "approved" | "changes-requested"; notes?: string },
+): Promise<{ success: boolean }> => {
+  const res = await api.post(
+    `/board-portal/meetings/${meetingId}/minutes/chair-review/decide`,
+    dto,
+  );
+  return unwrap(res);
+};
+
+// This director adopting a Board/Committee meeting's minutes, in-app.
+export const adoptMinutes = async (
+  meetingId: string,
+  comment?: string,
+): Promise<{ success: boolean }> => {
+  const res = await api.post(
+    `/board-portal/meetings/${meetingId}/minutes/adopt`,
+    { comment },
+  );
   return unwrap(res);
 };
 

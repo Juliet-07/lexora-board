@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -6,9 +6,11 @@ import {
   CheckCircle2,
   ClipboardList,
   FileText,
+  Gavel,
   Loader2,
   Mail,
   Mic,
+  MessageSquare,
   Paperclip,
   ShieldAlert,
   Users2,
@@ -52,6 +54,8 @@ import {
   markMeetingNoticeOpened,
   setMyMeetingActionItemStatus,
   submitMeetingConflict,
+  decideMinutesChairReview,
+  adoptMinutes,
   resolveBoardFileUrl,
   MEETING_CONFLICT_ACTIONS,
   type MyMeeting,
@@ -316,6 +320,53 @@ export default function Meetings() {
       toast.error(err?.response?.data?.message ?? "Failed to record RSVP."),
   });
 
+  // Keeps the open minutes dialog's data fresh after a chair-review
+  // decision or adoption mutates it — otherwise the dialog would keep
+  // showing the stale snapshot it was opened with until closed again.
+  useEffect(() => {
+    if (!minutesTarget) return;
+    const fresh = meetings.find((m) => m._id === minutesTarget._id);
+    if (fresh && fresh !== minutesTarget) setMinutesTarget(fresh);
+  }, [meetings, minutesTarget]);
+
+  const [chairReviewNotes, setChairReviewNotes] = useState("");
+  const chairReviewMut = useMutation({
+    mutationFn: ({
+      meetingId,
+      decision,
+    }: {
+      meetingId: string;
+      decision: "approved" | "changes-requested";
+    }) =>
+      decideMinutesChairReview(meetingId, {
+        decision,
+        notes: chairReviewNotes.trim() || undefined,
+      }),
+    onSuccess: (_r, vars) => {
+      qc.invalidateQueries({ queryKey: ["board-my-meetings"] });
+      setChairReviewNotes("");
+      toast.success(
+        vars.decision === "approved"
+          ? "Minutes approved."
+          : "Changes requested — the tenant has been notified.",
+      );
+    },
+    onError: (err: any) =>
+      toast.error(
+        err?.response?.data?.message ?? "Failed to record your decision.",
+      ),
+  });
+
+  const adoptMut = useMutation({
+    mutationFn: (meetingId: string) => adoptMinutes(meetingId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["board-my-meetings"] });
+      toast.success("Minutes adopted.");
+    },
+    onError: (err: any) =>
+      toast.error(err?.response?.data?.message ?? "Failed to adopt minutes."),
+  });
+
   const openNotice = (m: MyMeeting) => {
     setMinutesTarget(m);
     if (m.notice && !m.myNoticeRsvp?.openedAt) {
@@ -555,7 +606,24 @@ export default function Meetings() {
                             )}
                           </TableCell>
                           <TableCell>
-                            {m.minutesSentAt ? (
+                            {m.myChairReview?.decision === "Pending" ? (
+                              <Button
+                                size="sm"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => setMinutesTarget(m)}
+                              >
+                                <Gavel className="mr-1 h-3 w-3" /> Review as
+                                Chair
+                              </Button>
+                            ) : m.canAdoptMinutes ? (
+                              <Button
+                                size="sm"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => setMinutesTarget(m)}
+                              >
+                                Adopt
+                              </Button>
+                            ) : m.minutesSentAt ? (
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -884,6 +952,93 @@ export default function Meetings() {
                   <p className="mb-1.5 flex items-center gap-1.5 text-[12.5px] font-bold text-muted-foreground">
                     <Mic className="h-3.5 w-3.5" /> Minutes
                   </p>
+
+                  {/* As Chair: review and approve/request changes —
+                      only shown to the director resolved as this
+                      meeting's Chair, while their decision is still
+                      pending. */}
+                  {minutesTarget.myChairReview?.decision === "Pending" && (
+                    <div className="mb-3 space-y-2 rounded-md border border-primary/30 bg-primary/5 p-3">
+                      <p className="flex items-center gap-1.5 text-[13px] font-semibold text-primary">
+                        <Gavel className="h-3.5 w-3.5" /> Awaiting your review,
+                        as Chair
+                      </p>
+                      {minutesTarget.myChairReview.pdfUrl && (
+                        <a
+                          href={resolveBoardFileUrl(
+                            minutesTarget.myChairReview.pdfUrl,
+                          )}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <Button size="sm" variant="outline">
+                            View minutes PDF
+                          </Button>
+                        </a>
+                      )}
+                      <Textarea
+                        rows={2}
+                        placeholder="Notes (required if requesting changes)"
+                        value={chairReviewNotes}
+                        onChange={(e) => setChairReviewNotes(e.target.value)}
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          disabled={chairReviewMut.isPending}
+                          onClick={() =>
+                            chairReviewMut.mutate({
+                              meetingId: minutesTarget._id,
+                              decision: "approved",
+                            })
+                          }
+                        >
+                          {chairReviewMut.isPending ? (
+                            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                          )}
+                          Approve minutes
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={
+                            chairReviewMut.isPending || !chairReviewNotes.trim()
+                          }
+                          onClick={() =>
+                            chairReviewMut.mutate({
+                              meetingId: minutesTarget._id,
+                              decision: "changes-requested",
+                            })
+                          }
+                        >
+                          <MessageSquare className="mr-1.5 h-3.5 w-3.5" />
+                          Request changes
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  {minutesTarget.myChairReview?.decision ===
+                    "Changes requested" && (
+                    <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-[13px] text-amber-800">
+                      You requested changes to these minutes
+                      {minutesTarget.myChairReview.decidedAt &&
+                        ` on ${shortDate(minutesTarget.myChairReview.decidedAt)}`}
+                      . Awaiting a revised draft from the organiser.
+                    </div>
+                  )}
+                  {minutesTarget.myChairReview?.decision === "Approved" &&
+                    minutesTarget.minutesDraftStatus === "Chair approved" && (
+                      <div className="mb-3 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-[13px] text-emerald-800">
+                        You approved these minutes, as Chair
+                        {minutesTarget.myChairReview.decidedAt &&
+                          ` on ${shortDate(minutesTarget.myChairReview.decidedAt)}`}
+                        . Awaiting the organiser to send them to all attendees
+                        for adoption.
+                      </div>
+                    )}
+
                   {minutesTarget.minutesSentAt ? (
                     <div className="space-y-2">
                       {minutesTarget.minutes && (
@@ -907,6 +1062,33 @@ export default function Meetings() {
                           </Button>
                         </a>
                       )}
+                      {minutesTarget.minutesDraftStatus ===
+                      "Adopted and signed" ? (
+                        <p className="flex items-center gap-1.5 text-[13px] font-medium text-emerald-700">
+                          <CheckCircle2 className="h-3.5 w-3.5" /> Adopted and
+                          signed.
+                        </p>
+                      ) : minutesTarget.myBoardAdoption ? (
+                        <p className="flex items-center gap-1.5 text-[13px] font-medium text-emerald-700">
+                          <CheckCircle2 className="h-3.5 w-3.5" /> You adopted
+                          these minutes on{" "}
+                          {shortDate(minutesTarget.myBoardAdoption.submittedAt)}
+                          .
+                        </p>
+                      ) : minutesTarget.canAdoptMinutes ? (
+                        <Button
+                          size="sm"
+                          disabled={adoptMut.isPending}
+                          onClick={() => adoptMut.mutate(minutesTarget._id)}
+                        >
+                          {adoptMut.isPending ? (
+                            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                          )}
+                          Adopt minutes
+                        </Button>
+                      ) : null}
                     </div>
                   ) : (
                     <p className="text-[13px] text-muted-foreground">
