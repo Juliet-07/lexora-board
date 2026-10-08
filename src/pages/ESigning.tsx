@@ -1,14 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  Download,
-  PenLine,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  Loader2,
-} from "lucide-react";
+import { PenLine, CheckCircle2, XCircle, Clock, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,21 +28,72 @@ import {
 import {
   fetchEsgApprovals,
   decideEsgApproval,
+  fetchEsgCommitteeApprovals,
+  decideEsgCommitteeApproval,
   resolveBoardFileUrl,
-  type PendingEsgApproval,
 } from "@/lib/board-api";
+
+type EsigningRole = "ESG Committee Chair" | "Board Chair";
+
+// A unified shape over both board-portal dockets — a director can
+// show up in either, or both, so the page merges them into one list
+// tagged by role rather than rendering two separate pages. Only the
+// Board Chair's items carry a prior-reviewer snapshot (esgChairName/
+// esgChairDecidedAt); the Committee Chair is always the first step,
+// so there's nothing before them to show.
+interface EsigningItem {
+  role: EsigningRole;
+  id: string;
+  code: string;
+  title: string;
+  requirement: string;
+  response: string;
+  evidence: { _id?: string; name: string; fileUrl: string | null }[];
+  frameworkLabel: string;
+  myDecision: "Pending" | "Approved" | "Declined";
+  myNotes: string;
+  myDecidedAt: string | null;
+  esgChairName?: string;
+  esgChairDecidedAt?: string | null;
+}
+
+const fmtDate = (d: string | null | undefined) =>
+  d
+    ? new Date(d).toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      })
+    : "";
 
 export default function ESigning() {
   const qc = useQueryClient();
-  const { data: items = [], isLoading } = useQuery({
+
+  const boardChairQuery = useQuery({
     queryKey: ["board-esg-approvals"],
     queryFn: fetchEsgApprovals,
   });
+  const committeeChairQuery = useQuery({
+    queryKey: ["board-esg-committee-approvals"],
+    queryFn: fetchEsgCommitteeApprovals,
+  });
+  const isLoading = boardChairQuery.isLoading || committeeChairQuery.isLoading;
+
+  const items: EsigningItem[] = [
+    ...(committeeChairQuery.data ?? []).map((i) => ({
+      ...i,
+      role: "ESG Committee Chair" as const,
+    })),
+    ...(boardChairQuery.data ?? []).map((i) => ({
+      ...i,
+      role: "Board Chair" as const,
+    })),
+  ];
 
   const awaiting = items.filter((i) => i.myDecision === "Pending");
   const decided = items.filter((i) => i.myDecision !== "Pending");
 
-  const [target, setTarget] = useState<PendingEsgApproval | null>(null);
+  const [target, setTarget] = useState<EsigningItem | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [fullName, setFullName] = useState("");
   const [notes, setNotes] = useState("");
@@ -62,8 +106,16 @@ export default function ESigning() {
   };
 
   const decideMut = useMutation({
-    mutationFn: ({ decision }: { decision: "Approved" | "Declined" }) =>
-      decideEsgApproval(target!.id, decision, notes.trim() || undefined),
+    mutationFn: ({ decision }: { decision: "Approved" | "Declined" }) => {
+      if (!target) return Promise.reject(new Error("No disclosure selected"));
+      return target.role === "ESG Committee Chair"
+        ? decideEsgCommitteeApproval(
+            target.id,
+            decision,
+            notes.trim() || undefined,
+          )
+        : decideEsgApproval(target.id, decision, notes.trim() || undefined);
+    },
     onSuccess: (_res, { decision }) => {
       toast.success(
         decision === "Approved" ? "Signature applied" : "Declined",
@@ -75,6 +127,7 @@ export default function ESigning() {
         },
       );
       qc.invalidateQueries({ queryKey: ["board-esg-approvals"] });
+      qc.invalidateQueries({ queryKey: ["board-esg-committee-approvals"] });
       closeDialog();
     },
     onError: (e: any) =>
@@ -108,30 +161,31 @@ export default function ESigning() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">E-Signing</h1>
         <p className="text-sm text-muted-foreground">
-          ESG disclosures requiring your electronic signature as Board Chair,
-          once the ESG Committee Chair has reviewed them.
+          ESG disclosures awaiting your review — as ESG Committee Chair, the
+          first step in the chain, or as Board Chair once the Committee Chair
+          has reviewed.
         </p>
       </div>
 
       <Tabs defaultValue="awaiting">
         <TabsList>
           <TabsTrigger value="awaiting">
-            Awaiting signature ({awaiting.length})
+            Awaiting action ({awaiting.length})
           </TabsTrigger>
-          <TabsTrigger value="signed">Signed</TabsTrigger>
+          <TabsTrigger value="signed">History</TabsTrigger>
         </TabsList>
 
         <TabsContent value="awaiting" className="space-y-2.5">
           {awaiting.length === 0 && (
             <Card>
               <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                Nothing awaiting your signature.
+                Nothing awaiting your review or signature.
               </CardContent>
             </Card>
           )}
           {awaiting.map((doc) => (
             <Card
-              key={doc.id}
+              key={`${doc.role}-${doc.id}`}
               className="cursor-pointer"
               onClick={() => setTarget(doc)}
             >
@@ -145,10 +199,14 @@ export default function ESigning() {
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {doc.frameworkLabel}
-                    {doc.esgChairName &&
-                      ` · Reviewed by ${doc.esgChairName}${doc.esgChairDecidedAt ? ` on ${new Date(doc.esgChairDecidedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}` : ""}`}
+                    {doc.role === "Board Chair" &&
+                      doc.esgChairName &&
+                      ` · Reviewed by ${doc.esgChairName}${doc.esgChairDecidedAt ? ` on ${fmtDate(doc.esgChairDecidedAt)}` : ""}`}
                   </p>
                 </div>
+                <Badge variant="outline" className="whitespace-nowrap">
+                  {doc.role}
+                </Badge>
                 <Badge className="bg-warning/15 text-amber-700 hover:bg-warning/15">
                   Pending
                 </Badge>
@@ -170,19 +228,23 @@ export default function ESigning() {
           <Card>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
-                <Table className="min-w-[480px]">
+                <Table className="min-w-[560px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Disclosure</TableHead>
+                      <TableHead>Role</TableHead>
                       <TableHead>Decision</TableHead>
                       <TableHead>Decided on</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {decided.map((doc) => (
-                      <TableRow key={doc.id}>
+                      <TableRow key={`${doc.role}-${doc.id}`}>
                         <TableCell className="whitespace-nowrap font-semibold">
                           {doc.code} — {doc.title}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-muted-foreground">
+                          {doc.role}
                         </TableCell>
                         <TableCell>
                           <Badge
@@ -201,26 +263,17 @@ export default function ESigning() {
                           </Badge>
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-muted-foreground">
-                          {doc.myDecidedAt
-                            ? new Date(doc.myDecidedAt).toLocaleDateString(
-                                "en-GB",
-                                {
-                                  day: "2-digit",
-                                  month: "short",
-                                  year: "numeric",
-                                },
-                              )
-                            : "—"}
+                          {fmtDate(doc.myDecidedAt) || "—"}
                         </TableCell>
                       </TableRow>
                     ))}
                     {decided.length === 0 && (
                       <TableRow>
                         <TableCell
-                          colSpan={3}
+                          colSpan={4}
                           className="text-center text-xs text-muted-foreground py-8"
                         >
-                          Nothing signed yet.
+                          Nothing decided yet.
                         </TableCell>
                       </TableRow>
                     )}
@@ -272,12 +325,20 @@ export default function ESigning() {
                 ))}
               </div>
             )}
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Clock className="h-3 w-3" />
-              Reviewed by {target?.esgChairName || "the ESG Committee Chair"}
-              {target?.esgChairDecidedAt &&
-                ` on ${new Date(target.esgChairDecidedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}`}
-            </div>
+            {target?.role === "Board Chair" ? (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Clock className="h-3 w-3" />
+                Reviewed by {target?.esgChairName || "the ESG Committee Chair"}
+                {target?.esgChairDecidedAt &&
+                  ` on ${fmtDate(target.esgChairDecidedAt)}`}
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Clock className="h-3 w-3" />
+                You're reviewing this as the first step in the approval chain —
+                the Board Chair signs next, once you approve.
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label className="text-xs">Notes (optional)</Label>
               <Input
@@ -298,7 +359,8 @@ export default function ESigning() {
                 className="text-xs font-normal leading-relaxed"
               >
                 I have read and understood this disclosure. By clicking "Apply
-                signature" I electronically sign it as Board Chair.
+                signature" I electronically sign it as{" "}
+                {target?.role ?? "reviewer"}.
               </Label>
             </div>
             <div className="space-y-1.5">

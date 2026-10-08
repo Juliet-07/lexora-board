@@ -335,11 +335,16 @@ export const decideGovernanceCode = async (
 };
 
 // ══════════════════════════════════════════════════════════════
-// ESG disclosure approvals — the Board Chair's own docket, per
-// esg-board-portal.controller.ts#getPending/decide. Only ever listed
-// here once the ESG Committee Chair (who signs externally by email)
-// has already approved — the backend hard-gates this, this is just
-// the matching display: "one cannot sign if the other hasn't".
+// ESG disclosure approvals — two separate board-portal dockets, one
+// per role in the two-party approval chain (board.controller.ts
+// #getPending/decide and #getCommitteeApprovals/decideCommittee).
+// Committee members — the ESG Committee Chair included — are always
+// real board members (same precedent the Minutes chair-review/
+// adoption workflow established), so both roles review in-app now;
+// neither needs an external emailed link. The Board Chair's docket
+// is still only ever populated once the ESG Committee Chair has
+// approved — the backend hard-gates this, this is just the matching
+// display: "one cannot sign if the other hasn't".
 // ══════════════════════════════════════════════════════════════
 
 export type EsgApprovalDecision = "Pending" | "Approved" | "Declined";
@@ -382,6 +387,43 @@ export const decideEsgApproval = async (
     decision,
     notes,
   });
+  return unwrap(res);
+};
+
+// The ESG Committee Chair's own docket — the first step in the
+// chain, so there's no prior reviewer to show (unlike the Board
+// Chair's PendingEsgApproval above, which shows who/when the
+// Committee Chair reviewed).
+export interface PendingEsgCommitteeApproval {
+  id: string;
+  code: string;
+  title: string;
+  requirement: string;
+  response: string;
+  evidence: IndicatorEvidence[];
+  frameworkLabel: string;
+  myDecision: EsgApprovalDecision;
+  myNotes: string;
+  myDecidedAt: string | null;
+}
+
+export const fetchEsgCommitteeApprovals = async (): Promise<
+  PendingEsgCommitteeApproval[]
+> => {
+  const res = await api.get("/board-portal/esg-committee-approvals");
+  const d = unwrap(res);
+  return Array.isArray(d) ? d : [];
+};
+
+export const decideEsgCommitteeApproval = async (
+  id: string,
+  decision: "Approved" | "Declined",
+  notes?: string,
+): Promise<{ status: string }> => {
+  const res = await api.post(
+    `/board-portal/esg-committee-approvals/${id}/decide`,
+    { decision, notes },
+  );
   return unwrap(res);
 };
 
