@@ -259,6 +259,33 @@ export default function BoardPacks() {
         </CardContent>
       </Card>
 
+      {selected.executiveSummary?.trim() && (
+        <Card>
+          <CardContent className="space-y-1.5 p-5">
+            <p className="flex items-center gap-1.5 text-[12.5px] font-bold text-muted-foreground">
+              <FileText className="h-3.5 w-3.5" /> Cover page &amp; executive
+              summary
+            </p>
+            <div
+              className="text-[13px] prose prose-sm max-w-none [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
+              dangerouslySetInnerHTML={{ __html: selected.executiveSummary }}
+            />
+            {selected.executiveSummaryUpdatedAt && (
+              <p className="pt-1 text-[11px] text-muted-foreground">
+                Last updated{" "}
+                {new Date(
+                  selected.executiveSummaryUpdatedAt,
+                ).toLocaleDateString("en-GB", {
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                })}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       <div className="space-y-2">
         {selected.boardPack.map((doc: MyMeetingBoardPackDoc, i: number) => {
           const Icon = iconForDoc(doc.name);

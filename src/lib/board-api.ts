@@ -614,6 +614,11 @@ export interface MyMeeting {
   status: MyMeetingStatus;
   agenda: MyMeetingAgendaItem[];
   boardPack: MyMeetingBoardPackDoc[];
+  // Board Packs page — the pack's own cover page, rich HTML the
+  // tenant's Company Secretary drafts before circulating the pack.
+  // Empty string until they've written one.
+  executiveSummary: string;
+  executiveSummaryUpdatedAt: string | null;
   // Only populated once minutes have actually been sent — a director
   // is never shown a draft/unsent minutes text.
   minutes: string | null;
