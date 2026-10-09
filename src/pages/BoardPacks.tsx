@@ -387,8 +387,16 @@ export default function BoardPacks() {
                             key={ni}
                             className="rounded-lg border bg-card p-2.5"
                           >
-                            <p className="text-xs font-semibold">
-                              {n.authorName}{" "}
+                            <p className="flex items-center gap-1.5 text-xs font-semibold">
+                              {n.authorName}
+                              {n.fromTenant && (
+                                <Badge
+                                  variant="outline"
+                                  className="border-primary/30 bg-primary/10 text-primary text-[10px] px-1.5 py-0"
+                                >
+                                  Company Secretary
+                                </Badge>
+                              )}
                               <span className="font-normal text-muted-foreground">
                                 ·{" "}
                                 {new Date(n.createdAt).toLocaleDateString(

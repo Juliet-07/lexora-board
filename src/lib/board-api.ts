@@ -693,6 +693,9 @@ export interface BoardPackNote {
   authorEmail: string;
   text: string;
   createdAt: string;
+  // True when this entry is the tenant's (Company Secretary's) reply
+  // rather than a director's own note/question.
+  fromTenant: boolean;
 }
 
 export const fetchMyMeetings = async (): Promise<MyMeeting[]> => {
