@@ -1173,3 +1173,423 @@ export const markAllNotificationsRead = async (): Promise<{
   const res = await api.post("/board-portal/notifications/mark-all-read");
   return unwrap(res);
 };
+
+// ══════════════════════════════════════════════════════════════
+// Resolutions — Board & Written resolutions the signed-in director
+// has a vote/response on (Shareholder resolutions aren't individual
+// director votes, so they never appear here). Voting happens only
+// here now — the tenant side lost its vote-casting UI (Oct 2026).
+// ══════════════════════════════════════════════════════════════
+
+export type ResolutionType = "Board" | "Written";
+export type ResolutionStatusT =
+  | "Draft"
+  | "Voting open"
+  | "Circulating"
+  | "Closed";
+export type ResolutionOutcomeT = "Passed" | "Failed" | null;
+export type MyVoteChoice = "Approve" | "Oppose" | "Abstain";
+
+export interface MyResolutionRow {
+  recused: boolean;
+  vote: MyVoteChoice | null;
+  status: "Not sent" | "Sent" | "Reminded" | "Responded" | null;
+  comment: string;
+  respondedAt: string | null;
+}
+
+export interface MyResolutionTally {
+  approve: number;
+  oppose: number;
+  abstain: number;
+  awaiting: number;
+  total: number;
+}
+
+export interface MyResolution {
+  _id: string;
+  reference: string;
+  type: ResolutionType;
+  subject: string;
+  fullText: string;
+  status: ResolutionStatusT;
+  outcome: ResolutionOutcomeT;
+  effectiveDate: string;
+  deadline: string | null;
+  proposer: string | null;
+  seconder: string | null;
+  tally: MyResolutionTally;
+  myRow: MyResolutionRow | null;
+  canAct: boolean;
+}
+
+export const fetchMyResolutions = async (): Promise<MyResolution[]> => {
+  const res = await api.get("/board-portal/resolutions");
+  const d = unwrap(res);
+  return Array.isArray(d) ? d : [];
+};
+
+export const castMyResolutionVote = async (
+  id: string,
+  vote: MyVoteChoice,
+  comment?: string,
+): Promise<MyResolution> =>
+  unwrap(
+    await api.post(`/board-portal/resolutions/${id}/vote`, { vote, comment }),
+  );
+
+export const respondMyResolution = async (
+  id: string,
+  response: MyVoteChoice,
+  comment?: string,
+): Promise<MyResolution> =>
+  unwrap(
+    await api.post(`/board-portal/resolutions/${id}/respond`, {
+      response,
+      comment,
+    }),
+  );
+
+// ══════════════════════════════════════════════════════════════
+// Document Vault — documents/folders the tenant has uploaded for
+// THIS director specifically (BoardMember.documents), not a
+// company-wide library.
+// ══════════════════════════════════════════════════════════════
+
+export interface MyVaultDocument {
+  _id: string;
+  name: string;
+  category: "Governance Document" | "Regulatory Filing";
+  fileUrl: string | null;
+  mimeType: string | null;
+  size: number;
+  uploadedAt: string;
+  uploadedBy: string;
+  signedAt: string | null;
+  folder: string;
+}
+
+export interface MyVaultFolder {
+  _id: string;
+  name: string;
+}
+
+export interface MyVault {
+  documents: MyVaultDocument[];
+  documentFolders: MyVaultFolder[];
+}
+
+export const fetchMyVault = async (): Promise<MyVault> => {
+  const res = await api.get("/board-portal/documents");
+  return unwrap(res) ?? { documents: [], documentFolders: [] };
+};
+
+// ══════════════════════════════════════════════════════════════
+// Policies — the Compliance page's communication with the tenant's
+// Policies & Procedures page (GRC Compliance module): a policy that
+// requires board sign-off flows here for approval, and once
+// published, flows here again for acknowledgement. Both decided
+// in-app, not via an emailed link (Oct 2026).
+// ══════════════════════════════════════════════════════════════
+
+export type PolicyApprovalDecision = "Pending" | "Approved" | "Rejected";
+
+export interface PolicySectionRow {
+  id: string;
+  title: string;
+  content: string;
+  order: number;
+}
+
+export interface PendingPolicyApproval {
+  id: string;
+  title: string;
+  category: string;
+  version: string;
+  status: string;
+  description: string;
+  sections: PolicySectionRow[];
+  fileName: string;
+  fileUrl: string | null;
+  mimeType: string | null;
+  myDecision: PolicyApprovalDecision | null;
+  myNotes: string;
+  myDecidedAt: string | null;
+}
+
+export const fetchMyPolicyApprovals = async (): Promise<
+  PendingPolicyApproval[]
+> => {
+  const res = await api.get("/board-portal/policies/approvals");
+  const d = unwrap(res);
+  return Array.isArray(d) ? d : [];
+};
+
+export const decideMyPolicyApproval = async (
+  id: string,
+  decision: "Approved" | "Rejected",
+  notes?: string,
+): Promise<PendingPolicyApproval> =>
+  unwrap(
+    await api.post(`/board-portal/policies/approvals/${id}/decide`, {
+      decision,
+      notes,
+    }),
+  );
+
+export interface PendingPolicyAcknowledgement {
+  id: string;
+  title: string;
+  category: string;
+  version: string;
+  description: string;
+  sections: PolicySectionRow[];
+  fileName: string;
+  fileUrl: string | null;
+  mimeType: string | null;
+  alreadyAcknowledged: boolean;
+  ackedAt: string | null;
+}
+
+export const fetchMyPolicyAcknowledgements = async (): Promise<
+  PendingPolicyAcknowledgement[]
+> => {
+  const res = await api.get("/board-portal/policies/acknowledgements");
+  const d = unwrap(res);
+  return Array.isArray(d) ? d : [];
+};
+
+export const acknowledgeMyPolicy = async (
+  id: string,
+  signature: string,
+): Promise<{ success: boolean }> =>
+  unwrap(
+    await api.post(
+      `/board-portal/policies/acknowledgements/${id}/acknowledge`,
+      {
+        signature,
+      },
+    ),
+  );
+
+// ══════════════════════════════════════════════════════════════
+// Fee structure — the Payments & Fees page's "Fee structure" tab,
+// set by the tenant per director in Board Management's own
+// Remuneration card (Oct 2026).
+// ══════════════════════════════════════════════════════════════
+
+export interface MyFeeStructure {
+  annualRetainer: number;
+  committeeChairFee: number;
+  meetingAttendanceFee: number;
+  lastReviewedAt: string | null;
+}
+
+export const fetchMyFeeStructure = async (): Promise<MyFeeStructure> => {
+  const res = await api.get("/board-portal/fee-structure");
+  return (
+    unwrap(res) ?? {
+      annualRetainer: 0,
+      committeeChairFee: 0,
+      meetingAttendanceFee: 0,
+      lastReviewedAt: null,
+    }
+  );
+};
+
+// ══════════════════════════════════════════════════════════════
+// Expense claims — the Payments & Fees page's "Expense claims" tab.
+// Multi-currency; picking category "Other" requires saying what the
+// claim is for (Oct 2026).
+// ══════════════════════════════════════════════════════════════
+
+export type MyClaimStatus = "Submitted" | "Approved" | "Rejected" | "Paid";
+export type MyClaimCategory = "Travel" | "Accommodation" | "Meals" | "Other";
+
+export interface MyExpenseClaim {
+  _id: string;
+  ref: string;
+  description: string;
+  category: MyClaimCategory | null;
+  otherCategoryDetail: string;
+  relatedMeetingLabel: string;
+  amount: number;
+  currency: string;
+  status: MyClaimStatus;
+  receiptUrl: string | null;
+  receiptName: string | null;
+  createdAt: string;
+}
+
+export const fetchMyExpenseClaims = async (): Promise<MyExpenseClaim[]> => {
+  const res = await api.get("/board-portal/expense-claims");
+  const d = unwrap(res);
+  return Array.isArray(d) ? d : [];
+};
+
+export const submitMyExpenseClaim = async (dto: {
+  description: string;
+  amount: number;
+  currency?: string;
+  category?: MyClaimCategory;
+  otherCategoryDetail?: string;
+  relatedMeetingLabel?: string;
+}): Promise<MyExpenseClaim> =>
+  unwrap(await api.post("/board-portal/expense-claims", dto));
+
+// ══════════════════════════════════════════════════════════════
+// Fee statements — the Payments & Fees page's "Fee statements" tab.
+// Bills the tenant has recorded against this director via Capture
+// Bill's board-member flow (Oct 2026); "Paid" here is the real
+// record of the tenant having paid the director.
+// ══════════════════════════════════════════════════════════════
+
+export type MyFeeStatementStatus =
+  | "Awaiting approval"
+  | "Approved"
+  | "Scheduled"
+  | "Paid"
+  | "Rejected";
+
+export interface MyFeeStatement {
+  _id: string;
+  ref: string;
+  description: string;
+  category: string;
+  dueOn: string;
+  amount: number;
+  currency: string;
+  status: MyFeeStatementStatus;
+  paidAt: string | null;
+  scheduledPaymentDate: string | null;
+  receiptUrl: string | null;
+  receiptFileName: string | null;
+}
+
+export const fetchMyFeeStatements = async (): Promise<MyFeeStatement[]> => {
+  const res = await api.get("/board-portal/fee-statements");
+  const d = unwrap(res);
+  return Array.isArray(d) ? d : [];
+};
+
+// ══════════════════════════════════════════════════════════════
+// Board Evaluations (Oct 2026) — "the board member is able to
+// evaluate the peer according to each board member... same thing as
+// when doing committee eval. When the board member is a chair, the
+// tab for chair evaluation should be hidden." Self is one submission;
+// Peer and Committee are one submission per target.
+// ══════════════════════════════════════════════════════════════
+
+export interface EvaluationRating {
+  question: string;
+  score: number;
+}
+
+export interface EvaluationSubmission {
+  _id: string;
+  type: "Self" | "Peer" | "Chair" | "Committee";
+  targetId: string | null;
+  targetName: string;
+  committeeId: string | null;
+  committeeName: string;
+  ratings: EvaluationRating[];
+  comment: string;
+  submittedAt: string;
+}
+
+export interface MyEvaluationCycle {
+  _id: string;
+  title: string;
+  dueDate: string;
+  status: "Open" | "Closed";
+  createdAt: string;
+}
+
+export interface MyEvaluationPeer {
+  id: string;
+  name: string;
+  role: string;
+}
+
+export interface MyEvaluationCommittee {
+  id: string;
+  name: string;
+  isChair: boolean;
+}
+
+export interface MyEvaluationContext {
+  cycle: MyEvaluationCycle | null;
+  isChair: boolean;
+  reviewerName: string;
+  peers: MyEvaluationPeer[];
+  chair: { id: string; name: string } | null;
+  committees: MyEvaluationCommittee[];
+  submissions: {
+    self: EvaluationSubmission | null;
+    peer: Record<string, EvaluationSubmission>;
+    chair: EvaluationSubmission | null;
+    committee: Record<string, EvaluationSubmission>;
+  };
+}
+
+export const fetchMyEvaluationContext =
+  async (): Promise<MyEvaluationContext> =>
+    unwrap(await api.get("/board-portal/evaluations/context"));
+
+export interface MyEvaluationHistoryRow {
+  cycleId: string;
+  title: string;
+  dueDate: string;
+  closedAt: string;
+  mySubmissionCount: number;
+  myTypes: string[];
+}
+
+export const fetchMyEvaluationHistory = async (): Promise<
+  MyEvaluationHistoryRow[]
+> => {
+  const res = await api.get("/board-portal/evaluations/history");
+  const d = unwrap(res);
+  return Array.isArray(d) ? d : [];
+};
+
+export interface SubmitEvaluationDto {
+  ratings: EvaluationRating[];
+  comment?: string;
+}
+
+export const submitMySelfEvaluation = async (
+  cycleId: string,
+  dto: SubmitEvaluationDto,
+): Promise<EvaluationSubmission> =>
+  unwrap(await api.post(`/board-portal/evaluations/${cycleId}/self`, dto));
+
+export const submitMyPeerEvaluation = async (
+  cycleId: string,
+  targetId: string,
+  dto: SubmitEvaluationDto,
+): Promise<EvaluationSubmission> =>
+  unwrap(
+    await api.post(
+      `/board-portal/evaluations/${cycleId}/peer/${targetId}`,
+      dto,
+    ),
+  );
+
+export const submitMyChairEvaluation = async (
+  cycleId: string,
+  dto: SubmitEvaluationDto,
+): Promise<EvaluationSubmission> =>
+  unwrap(await api.post(`/board-portal/evaluations/${cycleId}/chair`, dto));
+
+export const submitMyCommitteeEvaluation = async (
+  cycleId: string,
+  committeeId: string,
+  dto: SubmitEvaluationDto,
+): Promise<EvaluationSubmission> =>
+  unwrap(
+    await api.post(
+      `/board-portal/evaluations/${cycleId}/committee/${committeeId}`,
+      dto,
+    ),
+  );
