@@ -50,7 +50,7 @@ export const NAV_ITEMS: PortalNavItem[] = [
   { title: "Governance Codes", url: "/governance-codes", icon: BookOpen },
   { title: "Committees", url: "/committees", icon: Landmark },
   { title: "Skills Matrix", url: "/skills-matrix", icon: Target },
-  { title: "Declarations", url: "/declarations", icon: Scale },
+  { title: "Board Evaluations", url: "/evaluations", icon: LineChart },
   { title: "Board Directory", url: "/directory", icon: UserRound },
   { title: "Document Vault", url: "/vault", icon: Lock },
   { title: "E-Signing", url: "/e-signing", icon: PenLine },
