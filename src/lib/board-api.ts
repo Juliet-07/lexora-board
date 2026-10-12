@@ -197,6 +197,9 @@ export interface MyBoardProfile {
   // Lives only on the User doc backend-side — see
   // BoardMemberService#getMyProfile.
   phone: string;
+  // Lives on the BoardMember doc — editing it here also updates what the
+  // tenant's own Board Management > Personal details shows (PO, Oct 2026).
+  bio: string;
   appointedAt: string;
   termEnds: string;
   lifecycleStatus: BoardMemberLifecycleStatus;
@@ -226,6 +229,7 @@ export const fetchMyProfile = async (): Promise<MyBoardProfile> => {
 export const updateMyProfile = async (dto: {
   phone?: string;
   email?: string;
+  bio?: string;
 }): Promise<MyBoardProfile> => {
   const res = await api.patch("/board-portal/me", dto);
   return unwrap(res);
@@ -1382,6 +1386,7 @@ export interface MyFeeStructure {
   annualRetainer: number;
   committeeChairFee: number;
   meetingAttendanceFee: number;
+  currency: string;
   lastReviewedAt: string | null;
 }
 
@@ -1392,6 +1397,7 @@ export const fetchMyFeeStructure = async (): Promise<MyFeeStructure> => {
       annualRetainer: 0,
       committeeChairFee: 0,
       meetingAttendanceFee: 0,
+      currency: "RWF",
       lastReviewedAt: null,
     }
   );

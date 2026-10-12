@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -27,10 +28,16 @@ import {
 // real backend; there is no notification-preferences section any
 // more, and no 2FA/login-history section — neither was asked for and
 // neither has a backend to wire to.
+//
+// Bio is also self-editable here (PO, Oct 2026: "let bio be part of
+// the details the board member can update and this will also update
+// the bio in the tenant's end as well") — it's the same BoardMember.bio
+// field the tenant's own Board Management > Personal details reads, so
+// a save here is immediately visible on the tenant side too.
 export default function Settings() {
   const queryClient = useQueryClient();
   const [editOpen, setEditOpen] = useState(false);
-  const [editForm, setEditForm] = useState({ phone: "", email: "" });
+  const [editForm, setEditForm] = useState({ phone: "", email: "", bio: "" });
 
   const [pwOpen, setPwOpen] = useState(false);
   const [pwForm, setPwForm] = useState({
@@ -70,7 +77,11 @@ export default function Settings() {
 
   const openEdit = () => {
     if (!profile) return;
-    setEditForm({ phone: profile.phone ?? "", email: profile.email ?? "" });
+    setEditForm({
+      phone: profile.phone ?? "",
+      email: profile.email ?? "",
+      bio: profile.bio ?? "",
+    });
     setEditOpen(true);
   };
 
@@ -95,9 +106,7 @@ export default function Settings() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">
-          Profile &amp; Settings
-        </h1>
+        <h1 className="text-2xl font-bold tracking-tight">Profile &amp; Settings</h1>
         <p className="text-sm text-muted-foreground">
           Manage your personal information and security settings.
         </p>
@@ -123,9 +132,7 @@ export default function Settings() {
                 </div>
                 <div className="flex justify-between border-b pb-2">
                   <span className="text-muted-foreground">Email</span>
-                  <span className="font-medium text-primary">
-                    {profile.email}
-                  </span>
+                  <span className="font-medium text-primary">{profile.email}</span>
                 </div>
                 <div className="flex justify-between border-b pb-2">
                   <span className="text-muted-foreground">Phone</span>
@@ -139,7 +146,7 @@ export default function Settings() {
                       : "—"}
                   </span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between border-b pb-2">
                   <span className="text-muted-foreground">Term expires</span>
                   <span className="font-medium">
                     {profile.termEnds
@@ -147,14 +154,13 @@ export default function Settings() {
                       : "—"}
                   </span>
                 </div>
+                <div className="space-y-1">
+                  <span className="text-muted-foreground">Bio</span>
+                  <p className="font-medium">{profile.bio || "—"}</p>
+                </div>
               </div>
             )}
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={openEdit}
-              disabled={!profile}
-            >
+            <Button size="sm" variant="outline" onClick={openEdit} disabled={!profile}>
               Edit personal details
             </Button>
           </CardContent>
@@ -182,8 +188,8 @@ export default function Settings() {
             <DialogHeader>
               <DialogTitle>Edit personal details</DialogTitle>
               <DialogDescription>
-                Phone and email are self-editable; other fields are managed by
-                the Company Secretary.
+                Phone, email and bio are self-editable; other fields are
+                managed by the Company Secretary.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-2">
@@ -206,13 +212,20 @@ export default function Settings() {
                   }
                 />
               </div>
+              <div className="space-y-1.5">
+                <Label>Bio</Label>
+                <Textarea
+                  rows={4}
+                  value={editForm.bio}
+                  onChange={(e) =>
+                    setEditForm((f) => ({ ...f, bio: e.target.value }))
+                  }
+                  placeholder="A short bio shown on your board profile."
+                />
+              </div>
             </div>
             <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setEditOpen(false)}
-              >
+              <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
                 Cancel
               </Button>
               <Button type="submit" disabled={updateMut.isPending}>
@@ -232,8 +245,8 @@ export default function Settings() {
             <DialogHeader>
               <DialogTitle>Change password</DialogTitle>
               <DialogDescription>
-                You'll keep using your current password to sign in until this is
-                submitted.
+                You'll keep using your current password to sign in until this
+                is submitted.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-2">
@@ -243,10 +256,7 @@ export default function Settings() {
                   type="password"
                   value={pwForm.currentPassword}
                   onChange={(e) =>
-                    setPwForm((f) => ({
-                      ...f,
-                      currentPassword: e.target.value,
-                    }))
+                    setPwForm((f) => ({ ...f, currentPassword: e.target.value }))
                   }
                 />
               </div>
@@ -266,20 +276,13 @@ export default function Settings() {
                   type="password"
                   value={pwForm.confirmPassword}
                   onChange={(e) =>
-                    setPwForm((f) => ({
-                      ...f,
-                      confirmPassword: e.target.value,
-                    }))
+                    setPwForm((f) => ({ ...f, confirmPassword: e.target.value }))
                   }
                 />
               </div>
             </div>
             <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setPwOpen(false)}
-              >
+              <Button type="button" variant="outline" onClick={() => setPwOpen(false)}>
                 Cancel
               </Button>
               <Button type="submit" disabled={pwMut.isPending}>

@@ -43,7 +43,6 @@ import {
   type MyFeeStatementStatus,
 } from "@/lib/board-api";
 
-const fmtRwf = (n: number) => `RWF ${n.toLocaleString()}`;
 const fmtMoney = (n: number, currency: string) =>
   `${currency} ${n.toLocaleString()}`;
 
@@ -430,7 +429,10 @@ export default function Payments() {
                 <div className="flex justify-between border-b pb-2">
                   <span className="text-muted-foreground">Annual retainer</span>
                   <span className="font-medium">
-                    {fmtRwf(feeStructure?.annualRetainer ?? 0)}
+                    {fmtMoney(
+                      feeStructure?.annualRetainer ?? 0,
+                      feeStructure?.currency ?? "RWF",
+                    )}
                   </span>
                 </div>
                 <div className="flex justify-between border-b pb-2">
@@ -438,7 +440,11 @@ export default function Payments() {
                     Meeting attendance fee
                   </span>
                   <span className="font-medium">
-                    {fmtRwf(feeStructure?.meetingAttendanceFee ?? 0)} / meeting
+                    {fmtMoney(
+                      feeStructure?.meetingAttendanceFee ?? 0,
+                      feeStructure?.currency ?? "RWF",
+                    )}{" "}
+                    / meeting
                   </span>
                 </div>
                 <div className="flex justify-between border-b pb-2">
@@ -446,7 +452,11 @@ export default function Payments() {
                     Committee chair fee
                   </span>
                   <span className="font-medium">
-                    {fmtRwf(feeStructure?.committeeChairFee ?? 0)} / meeting
+                    {fmtMoney(
+                      feeStructure?.committeeChairFee ?? 0,
+                      feeStructure?.currency ?? "RWF",
+                    )}{" "}
+                    / meeting
                   </span>
                 </div>
                 {feeStructure?.lastReviewedAt && (
