@@ -22,16 +22,15 @@ import Onboarding from "@/pages/Onboarding";
 import GovernanceCodeApprovals from "@/pages/GovernanceCodeApprovals";
 import ComingSoon from "@/pages/ComingSoon";
 import SignContractPage from "@/pages/SignContractPage";
-import { NAV_GROUPS } from "@/components/layout/nav";
+import { NAV_ITEMS } from "@/components/layout/nav";
 import Committees from "./pages/Committees";
 import Meetings from "./pages/Meetings";
 import BoardPacks from "@/pages/BoardPacks";
-import Declarations from "@/pages/Declarations";
 import Evaluations from "@/pages/Evaluations";
 import Directory from "@/pages/Directory";
 import BoardCalendar from "./pages/Calendar";
 import Training from "./pages/Training";
-import Compliance from "@/pages/Compliance";
+import PolicyApprovals from "@/pages/PolicyApprovals";
 import Resolutions from "@/pages/Resolutions";
 import ESigning from "@/pages/ESigning";
 import Vault from "@/pages/Vault";
@@ -103,7 +102,7 @@ const BUILT_ROUTES = [
   "/directory",
   "/calendar",
   "/training",
-  "/compliance",
+  "/policy-approvals",
   "/resolutions",
   "/e-signing",
   "/vault",
@@ -114,7 +113,7 @@ const BUILT_ROUTES = [
   "/settings",
   "/skills-matrix",
 ];
-const placeholderRoutes = NAV_GROUPS.flatMap((g) => g.items).filter(
+const placeholderRoutes = NAV_ITEMS.filter(
   (i) => !BUILT_ROUTES.includes(i.url),
 );
 
@@ -159,12 +158,11 @@ const App = () => (
               <Route path="/committees" element={<Committees />} />
               <Route path="/meetings" element={<Meetings />} />
               <Route path="/board-packs" element={<BoardPacks />} />
-              <Route path="/declarations" element={<Declarations />} />
               <Route path="/evaluations" element={<Evaluations />} />
               <Route path="/directory" element={<Directory />} />
               <Route path="/calendar" element={<BoardCalendar />} />
               <Route path="/training" element={<Training />} />
-              <Route path="/compliance" element={<Compliance />} />
+              <Route path="/policy-approvals" element={<PolicyApprovals />} />
               <Route path="/resolutions" element={<Resolutions />} />
               <Route path="/e-signing" element={<ESigning />} />
               <Route path="/vault" element={<Vault />} />

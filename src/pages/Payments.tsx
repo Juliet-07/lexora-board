@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Clock, Wallet } from "lucide-react";
+import { Clock, Wallet, Paperclip } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,13 +32,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { paymentsKpis } from "@/data/paymentsMockData";
 import {
   fetchMyFeeStructure,
   fetchMyExpenseClaims,
   submitMyExpenseClaim,
   fetchMyMeetings,
   fetchMyFeeStatements,
+  resolveBoardFileUrl,
   type MyClaimCategory,
   type MyFeeStatementStatus,
 } from "@/lib/board-api";
@@ -46,6 +46,22 @@ import {
 const fmtRwf = (n: number) => `RWF ${n.toLocaleString()}`;
 const fmtMoney = (n: number, currency: string) =>
   `${currency} ${n.toLocaleString()}`;
+
+// Real figures can span more than one currency (a director's claims
+// and statements aren't all necessarily recorded in RWF) — sum per
+// currency rather than pretending there's one number, and join them
+// when more than one currency actually has a balance.
+const sumByCurrency = (items: { amount: number; currency: string }[]) => {
+  const map: Record<string, number> = {};
+  for (const it of items)
+    map[it.currency] = (map[it.currency] ?? 0) + it.amount;
+  return map;
+};
+const formatCurrencyMap = (map: Record<string, number>) => {
+  const entries = Object.entries(map).filter(([, v]) => v > 0);
+  if (entries.length === 0) return "—";
+  return entries.map(([cur, amt]) => fmtMoney(amt, cur)).join(" + ");
+};
 
 // Same list used across the tenant app's own finance pages (Payroll,
 // Profile currency picker) — kept in sync by convention, not import,
@@ -142,6 +158,41 @@ export default function Payments() {
     [meetings],
   );
 
+  // Real KPI strip (Oct 2026 — the stat cards used to show a static
+  // mock that never matched the tabs below). "Received YTD" is every
+  // Paid fee statement paid this calendar year; "Pending payment" is
+  // every statement not yet Paid/Rejected; "Expense claims" is the
+  // director's own outstanding (not yet Paid/Rejected) claims;
+  // "Next payment" is the nearest upcoming due/scheduled date among
+  // pending statements.
+  const kpis = useMemo(() => {
+    const now = new Date();
+    const paidThisYear = feeStatements.filter(
+      (fs) =>
+        fs.status === "Paid" &&
+        fs.paidAt &&
+        new Date(fs.paidAt).getFullYear() === now.getFullYear(),
+    );
+    const pendingStatements = feeStatements.filter(
+      (fs) => fs.status !== "Paid" && fs.status !== "Rejected",
+    );
+    const outstandingClaims = claims.filter(
+      (c) => c.status !== "Paid" && c.status !== "Rejected",
+    );
+    const upcomingDate = pendingStatements
+      .map((fs) => fs.scheduledPaymentDate ?? fs.dueOn)
+      .filter((d): d is string => !!d)
+      .map((d) => new Date(d))
+      .sort((a, b) => a.getTime() - b.getTime())[0];
+
+    return {
+      totalReceivedYtd: formatCurrencyMap(sumByCurrency(paidThisYear)),
+      pendingPayment: formatCurrencyMap(sumByCurrency(pendingStatements)),
+      expenseClaims: formatCurrencyMap(sumByCurrency(outstandingClaims)),
+      nextPayment: upcomingDate ? upcomingDate.toLocaleDateString() : "—",
+    };
+  }, [feeStatements, claims]);
+
   const [claimOpen, setClaimOpen] = useState(false);
   const [form, setForm] = useState({
     description: "",
@@ -151,8 +202,9 @@ export default function Payments() {
     otherCategoryDetail: "",
     relatedMeetingLabel: "",
   });
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
 
-  const resetForm = () =>
+  const resetForm = () => {
     setForm({
       description: "",
       amount: "",
@@ -161,20 +213,25 @@ export default function Payments() {
       otherCategoryDetail: "",
       relatedMeetingLabel: "",
     });
+    setReceiptFile(null);
+  };
 
   const submitMut = useMutation({
     mutationFn: () =>
-      submitMyExpenseClaim({
-        description: form.description.trim(),
-        amount: Number(form.amount),
-        currency: form.currency,
-        category: form.category,
-        otherCategoryDetail:
-          form.category === "Other"
-            ? form.otherCategoryDetail.trim()
-            : undefined,
-        relatedMeetingLabel: form.relatedMeetingLabel || undefined,
-      }),
+      submitMyExpenseClaim(
+        {
+          description: form.description.trim(),
+          amount: Number(form.amount),
+          currency: form.currency,
+          category: form.category,
+          otherCategoryDetail:
+            form.category === "Other"
+              ? form.otherCategoryDetail.trim()
+              : undefined,
+          relatedMeetingLabel: form.relatedMeetingLabel || undefined,
+        },
+        receiptFile!,
+      ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["board-my-expense-claims"] });
       resetForm();
@@ -194,6 +251,10 @@ export default function Payments() {
     }
     if (form.category === "Other" && !form.otherCategoryDetail.trim()) {
       toast("Please specify what this expense claim is for.");
+      return;
+    }
+    if (!receiptFile) {
+      toast("Attach a receipt or supporting document for this claim.");
       return;
     }
     submitMut.mutate();
@@ -217,9 +278,7 @@ export default function Payments() {
             <p className="text-xs font-semibold text-muted-foreground">
               Total received (YTD)
             </p>
-            <p className="text-lg font-extrabold">
-              {paymentsKpis.totalReceivedYtd}
-            </p>
+            <p className="text-lg font-extrabold">{kpis.totalReceivedYtd}</p>
           </CardContent>
         </Card>
         <Card>
@@ -227,9 +286,7 @@ export default function Payments() {
             <p className="text-xs font-semibold text-muted-foreground">
               Pending payment
             </p>
-            <p className="text-lg font-extrabold">
-              {paymentsKpis.pendingPayment}
-            </p>
+            <p className="text-lg font-extrabold">{kpis.pendingPayment}</p>
           </CardContent>
         </Card>
         <Card>
@@ -237,9 +294,7 @@ export default function Payments() {
             <p className="text-xs font-semibold text-muted-foreground">
               Expense claims
             </p>
-            <p className="text-lg font-extrabold">
-              {paymentsKpis.expenseClaims}
-            </p>
+            <p className="text-lg font-extrabold">{kpis.expenseClaims}</p>
           </CardContent>
         </Card>
         <Card>
@@ -247,7 +302,7 @@ export default function Payments() {
             <p className="text-xs font-semibold text-muted-foreground">
               Next payment
             </p>
-            <p className="text-base font-bold">{paymentsKpis.nextPayment}</p>
+            <p className="text-base font-bold">{kpis.nextPayment}</p>
           </CardContent>
         </Card>
       </div>
@@ -319,6 +374,17 @@ export default function Payments() {
                             <div className="text-xs text-muted-foreground">
                               {c.relatedMeetingLabel}
                             </div>
+                          )}
+                          {c.receiptUrl && (
+                            <a
+                              href={resolveBoardFileUrl(c.receiptUrl)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-0.5 flex items-center gap-1 text-xs text-primary hover:underline"
+                            >
+                              <Paperclip className="h-3 w-3" />{" "}
+                              {c.receiptName || "Receipt"}
+                            </a>
                           )}
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
@@ -515,6 +581,23 @@ export default function Payments() {
                   className="min-h-[70px]"
                 />
               </div>
+              <div className="space-y-1.5">
+                <Label>Receipt or supporting document</Label>
+                <Input
+                  type="file"
+                  accept="application/pdf,image/jpeg,image/jpg,image/png,image/heic,image/webp"
+                  onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
+                />
+                {receiptFile ? (
+                  <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Paperclip className="h-3 w-3" /> {receiptFile.name}
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Required — PDF or image of the receipt.
+                  </p>
+                )}
+              </div>
             </div>
             <DialogFooter>
               <Button
@@ -524,7 +607,10 @@ export default function Payments() {
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={submitMut.isPending}>
+              <Button
+                type="submit"
+                disabled={submitMut.isPending || !receiptFile}
+              >
                 Submit
               </Button>
             </DialogFooter>

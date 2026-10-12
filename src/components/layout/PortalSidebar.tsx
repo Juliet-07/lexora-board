@@ -4,9 +4,6 @@ import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -14,7 +11,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBoardBadges } from "@/hooks/use-boardBadges";
-import { NAV_GROUPS } from "./nav";
+import { NAV_ITEMS } from "./nav";
 
 export function PortalSidebar() {
   const { state } = useSidebar();
@@ -51,39 +48,30 @@ export function PortalSidebar() {
       </div>
 
       <SidebarContent className="sidebar-scroll">
-        {NAV_GROUPS.map((group) => (
-          <SidebarGroup key={group.label}>
-            {!collapsed && <SidebarGroupLabel>{group.label}</SidebarGroupLabel>}
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {group.items.map((item) => {
-                  const count = item.badge ? navBadges[item.badge] : 0;
-                  return (
-                    <SidebarMenuItem key={item.url}>
-                      <SidebarMenuButton asChild tooltip={item.title}>
-                        <NavLink
-                          to={item.url}
-                          className="hover:bg-sidebar-accent/50 text-sidebar-foreground"
-                          activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                        >
-                          <item.icon className="mr-2 h-4 w-4" />
-                          {!collapsed && (
-                            <span className="flex-1">{item.title}</span>
-                          )}
-                          {!collapsed && count > 0 && (
-                            <span className="ml-auto rounded-full bg-destructive px-1.5 py-px text-[10px] font-bold leading-4 text-destructive-foreground">
-                              {count}
-                            </span>
-                          )}
-                        </NavLink>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ))}
+        <SidebarMenu>
+          {NAV_ITEMS.map((item) => {
+            const count = item.badge ? navBadges[item.badge] : 0;
+            return (
+              <SidebarMenuItem key={item.url}>
+                <SidebarMenuButton asChild tooltip={item.title}>
+                  <NavLink
+                    to={item.url}
+                    className="hover:bg-sidebar-accent/50 text-sidebar-foreground"
+                    activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                  >
+                    <item.icon className="mr-2 h-4 w-4" />
+                    {!collapsed && <span className="flex-1">{item.title}</span>}
+                    {!collapsed && count > 0 && (
+                      <span className="ml-auto rounded-full bg-destructive px-1.5 py-px text-[10px] font-bold leading-4 text-destructive-foreground">
+                        {count}
+                      </span>
+                    )}
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            );
+          })}
+        </SidebarMenu>
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border">

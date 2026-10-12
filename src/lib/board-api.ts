@@ -1427,15 +1427,28 @@ export const fetchMyExpenseClaims = async (): Promise<MyExpenseClaim[]> => {
   return Array.isArray(d) ? d : [];
 };
 
-export const submitMyExpenseClaim = async (dto: {
-  description: string;
-  amount: number;
-  currency?: string;
-  category?: MyClaimCategory;
-  otherCategoryDetail?: string;
-  relatedMeetingLabel?: string;
-}): Promise<MyExpenseClaim> =>
-  unwrap(await api.post("/board-portal/expense-claims", dto));
+// A receipt/supporting document is required (PO, Oct 2026: "For
+// board member to submit expense claim, a document must be
+// attached") — enforced server-side too (createAsBoardMember 400s
+// without one). multipart/form-data, same pattern as completeTraining.
+export const submitMyExpenseClaim = async (
+  dto: {
+    description: string;
+    amount: number;
+    currency?: string;
+    category?: MyClaimCategory;
+    otherCategoryDetail?: string;
+    relatedMeetingLabel?: string;
+  },
+  file: File,
+): Promise<MyExpenseClaim> => {
+  const form = new FormData();
+  Object.entries(dto).forEach(([k, v]) => {
+    if (v !== undefined && v !== "") form.append(k, String(v));
+  });
+  form.append("file", file);
+  return unwrap(await api.post("/board-portal/expense-claims", form));
+};
 
 // ══════════════════════════════════════════════════════════════
 // Fee statements — the Payments & Fees page's "Fee statements" tab.
