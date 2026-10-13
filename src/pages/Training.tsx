@@ -38,6 +38,10 @@ import {
   resolveBoardFileUrl,
   type MyTraining,
 } from "@/lib/board-api";
+import {
+  DocumentPreviewDialog,
+  type PreviewDocument,
+} from "@/components/DocumentPreviewDialog";
 
 const shortDate = (value?: string | null) =>
   value
@@ -59,6 +63,7 @@ function CompleteTrainingDialog({
 }) {
   const qc = useQueryClient();
   const [file, setFile] = useState<File | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<PreviewDocument | null>(null);
   const hasMaterial = !!training.resourceUrl;
 
   const mut = useMutation({
@@ -77,66 +82,77 @@ function CompleteTrainingDialog({
   });
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>{training.title}</DialogTitle>
-          <DialogDescription>
-            {training.provider && `${training.provider} · `}
-            {training.cpdHours} CPD hrs
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-3 text-sm">
-          {hasMaterial ? (
-            <>
-              <a
-                href={resolveBoardFileUrl(training.resourceUrl!)}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-1.5 text-primary underline"
-              >
-                <Paperclip className="h-4 w-4" />
-                {training.resourceName || "Open training material"}
-              </a>
-              <p className="text-xs text-muted-foreground">
-                Review the material above, then mark this training complete.
-              </p>
-            </>
-          ) : (
-            <>
-              <p className="text-xs text-muted-foreground">
-                No material was attached to this training. Upload proof of
-                completion (a certificate or screenshot) instead.
-              </p>
-              <div className="space-y-1.5">
-                <Label>Proof of completion</Label>
-                <Input
-                  type="file"
-                  accept=".pdf,image/*"
-                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                />
-              </div>
-            </>
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            disabled={mut.isPending || (!hasMaterial && !file)}
-            onClick={() => mut.mutate()}
-          >
-            {mut.isPending ? (
-              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{training.title}</DialogTitle>
+            <DialogDescription>
+              {training.provider && `${training.provider} · `}
+              {training.cpdHours} CPD hrs
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            {hasMaterial ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPreviewDoc({
+                      url: resolveBoardFileUrl(training.resourceUrl!),
+                      name: training.resourceName || "Training material",
+                    })
+                  }
+                  className="flex items-center gap-1.5 text-primary underline"
+                >
+                  <Paperclip className="h-4 w-4" />
+                  {training.resourceName || "Open training material"}
+                </button>
+                <p className="text-xs text-muted-foreground">
+                  Review the material above, then mark this training complete.
+                </p>
+              </>
             ) : (
-              <CheckCircle2 className="mr-1.5 h-4 w-4" />
+              <>
+                <p className="text-xs text-muted-foreground">
+                  No material was attached to this training. Upload proof of
+                  completion (a certificate or screenshot) instead.
+                </p>
+                <div className="space-y-1.5">
+                  <Label>Proof of completion</Label>
+                  <Input
+                    type="file"
+                    accept=".pdf,image/*"
+                    onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                  />
+                </div>
+              </>
             )}
-            Mark complete
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={mut.isPending || (!hasMaterial && !file)}
+              onClick={() => mut.mutate()}
+            >
+              {mut.isPending ? (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="mr-1.5 h-4 w-4" />
+              )}
+              Mark complete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <DocumentPreviewDialog
+        doc={previewDoc}
+        onOpenChange={(open) => !open && setPreviewDoc(null)}
+      />
+    </>
   );
 }
 
@@ -150,6 +166,7 @@ export default function Training() {
     queryFn: fetchMyTrainings,
   });
   const [target, setTarget] = useState<MyTraining | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<PreviewDocument | null>(null);
 
   const completed = trainings.filter((t) => t.myCompletion);
   const outstanding = trainings.filter((t) => !t.myCompletion);
@@ -298,26 +315,47 @@ export default function Training() {
                       </TableCell>
                       <TableCell>
                         {t.myCompletion ? (
-                          t.myCompletion.method ===
-                            "Proof of completion uploaded" &&
-                          t.myCompletion.proofFileUrl ? (
-                            <a
-                              href={resolveBoardFileUrl(
-                                t.myCompletion.proofFileUrl,
-                              )}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              <Button size="sm" variant="outline">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {t.resourceUrl && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  setPreviewDoc({
+                                    url: resolveBoardFileUrl(t.resourceUrl!),
+                                    name: t.resourceName || "Training material",
+                                  })
+                                }
+                              >
+                                <FileText className="mr-1.5 h-3.5 w-3.5" /> View
+                                material
+                              </Button>
+                            )}
+                            {t.myCompletion.method ===
+                              "Proof of completion uploaded" &&
+                            t.myCompletion.proofFileUrl ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  setPreviewDoc({
+                                    url: resolveBoardFileUrl(
+                                      t.myCompletion!.proofFileUrl!,
+                                    ),
+                                    name: "Proof of completion",
+                                  })
+                                }
+                              >
                                 <Award className="mr-1.5 h-3.5 w-3.5" /> View
                                 proof
                               </Button>
-                            </a>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">
-                              Completed {shortDate(t.myCompletion.completedAt)}
-                            </span>
-                          )
+                            ) : (
+                              <span className="text-xs text-muted-foreground">
+                                Completed{" "}
+                                {shortDate(t.myCompletion.completedAt)}
+                              </span>
+                            )}
+                          </div>
                         ) : (
                           <Button size="sm" onClick={() => setTarget(t)}>
                             {t.resourceUrl ? (
@@ -363,6 +401,11 @@ export default function Training() {
           onOpenChange={(o) => !o && setTarget(null)}
         />
       )}
+
+      <DocumentPreviewDialog
+        doc={previewDoc}
+        onOpenChange={(open) => !open && setPreviewDoc(null)}
+      />
     </div>
   );
 }

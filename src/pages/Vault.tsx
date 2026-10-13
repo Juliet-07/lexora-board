@@ -10,6 +10,10 @@ import {
   resolveBoardFileUrl,
   type MyVaultDocument,
 } from "@/lib/board-api";
+import {
+  DocumentPreviewDialog,
+  type PreviewDocument,
+} from "@/components/DocumentPreviewDialog";
 
 type CategoryFilter = "all" | MyVaultDocument["category"];
 
@@ -29,6 +33,7 @@ export default function Vault() {
     queryFn: fetchMyVault,
   });
   const [filter, setFilter] = useState<CategoryFilter>("all");
+  const [previewDoc, setPreviewDoc] = useState<PreviewDocument | null>(null);
 
   const documents = data?.documents ?? [];
 
@@ -136,14 +141,17 @@ export default function Vault() {
                     </Badge>
                   )}
                   {doc.fileUrl ? (
-                    <Button size="sm" variant="outline" asChild>
-                      <a
-                        href={resolveBoardFileUrl(doc.fileUrl)}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        View
-                      </a>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        setPreviewDoc({
+                          url: resolveBoardFileUrl(doc.fileUrl!),
+                          name: doc.name,
+                        })
+                      }
+                    >
+                      View
                     </Button>
                   ) : (
                     <Button size="sm" variant="outline" disabled>
@@ -156,6 +164,12 @@ export default function Vault() {
           </CardContent>
         </Card>
       ))}
+
+      <DocumentPreviewDialog
+        doc={previewDoc}
+        onOpenChange={(open) => !open && setPreviewDoc(null)}
+        allowDownload={false}
+      />
     </div>
   );
 }
