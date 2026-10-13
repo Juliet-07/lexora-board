@@ -1612,3 +1612,39 @@ export const submitMyCommitteeEvaluation = async (
       dto,
     ),
   );
+
+// ══════════════════════════════════════════════════════════════
+// Newsletters — the Newsletters & Updates page, now reading real
+// campaigns sent by the tenant from CRM Tools' Newsletter feature
+// (Segment audience = Board Member) instead of mock data. Per
+// newsletter.controller.ts's BoardPortalNewsletterController.
+// ══════════════════════════════════════════════════════════════
+
+export interface MyNewsletterEvent {
+  title: string;
+  dateTime: string;
+  location: string;
+  rsvp: boolean;
+}
+
+export interface MyNewsletter {
+  _id: string;
+  name: string;
+  type: "Newsletter" | "Event invite";
+  subject: string;
+  body: string; // HTML
+  event: MyNewsletterEvent | null;
+  sentAt: string;
+  opened: boolean;
+}
+
+export const fetchMyNewsletters = async (): Promise<MyNewsletter[]> => {
+  const res = await api.get("/board-portal/newsletters");
+  const d = unwrap(res);
+  return Array.isArray(d) ? d : [];
+};
+
+export const fetchMyNewsletter = async (id: string): Promise<MyNewsletter> => {
+  const res = await api.get(`/board-portal/newsletters/${id}`);
+  return unwrap(res);
+};
