@@ -47,6 +47,10 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import {
+  DocumentPreviewDialog,
+  type PreviewDocument,
+} from "@/components/DocumentPreviewDialog";
+import {
   fetchMyMeetings,
   fetchMyProfile,
   submitMeetingAck,
@@ -277,6 +281,7 @@ export default function Meetings() {
   const [ackTarget, setAckTarget] = useState<MyMeeting | null>(null);
   const [minutesTarget, setMinutesTarget] = useState<MyMeeting | null>(null);
   const [conflictTarget, setConflictTarget] = useState<MyMeeting | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<PreviewDocument | null>(null);
 
   const { data: profile } = useQuery({
     queryKey: ["board-my-profile"],
@@ -875,14 +880,18 @@ export default function Meetings() {
                       {minutesTarget.boardPack.map((d, i) => (
                         <li key={i} className="text-[13px]">
                           {d.fileUrl ? (
-                            <a
-                              href={resolveBoardFileUrl(d.fileUrl)}
-                              target="_blank"
-                              rel="noreferrer"
+                            <button
+                              type="button"
                               className="text-primary underline"
+                              onClick={() =>
+                                setPreviewDoc({
+                                  url: resolveBoardFileUrl(d.fileUrl)!,
+                                  name: d.name,
+                                })
+                              }
                             >
                               {d.name}
-                            </a>
+                            </button>
                           ) : (
                             d.name
                           )}
@@ -964,17 +973,20 @@ export default function Meetings() {
                         as Chair
                       </p>
                       {minutesTarget.myChairReview.pdfUrl && (
-                        <a
-                          href={resolveBoardFileUrl(
-                            minutesTarget.myChairReview.pdfUrl,
-                          )}
-                          target="_blank"
-                          rel="noreferrer"
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            setPreviewDoc({
+                              url: resolveBoardFileUrl(
+                                minutesTarget.myChairReview!.pdfUrl!,
+                              )!,
+                              name: "Minutes",
+                            })
+                          }
                         >
-                          <Button size="sm" variant="outline">
-                            View minutes PDF
-                          </Button>
-                        </a>
+                          View minutes PDF
+                        </Button>
                       )}
                       <Textarea
                         rows={2}
@@ -1050,17 +1062,20 @@ export default function Meetings() {
                         />
                       )}
                       {minutesTarget.minutesPdfUrl && (
-                        <a
-                          href={resolveBoardFileUrl(
-                            minutesTarget.minutesPdfUrl,
-                          )}
-                          target="_blank"
-                          rel="noreferrer"
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            setPreviewDoc({
+                              url: resolveBoardFileUrl(
+                                minutesTarget.minutesPdfUrl!,
+                              )!,
+                              name: "Minutes",
+                            })
+                          }
                         >
-                          <Button size="sm" variant="outline">
-                            Download minutes PDF
-                          </Button>
-                        </a>
+                          View minutes PDF
+                        </Button>
                       )}
                       {minutesTarget.minutesDraftStatus ===
                       "Adopted and signed" ? (
@@ -1110,6 +1125,12 @@ export default function Meetings() {
           onOpenChange={(o) => !o && setConflictTarget(null)}
         />
       )}
+
+      <DocumentPreviewDialog
+        doc={previewDoc}
+        onOpenChange={(open) => !open && setPreviewDoc(null)}
+        allowDownload={false}
+      />
     </div>
   );
 }

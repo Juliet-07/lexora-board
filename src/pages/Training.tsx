@@ -151,6 +151,7 @@ function CompleteTrainingDialog({
       <DocumentPreviewDialog
         doc={previewDoc}
         onOpenChange={(open) => !open && setPreviewDoc(null)}
+        allowDownload={false}
       />
     </>
   );
@@ -405,6 +406,7 @@ export default function Training() {
       <DocumentPreviewDialog
         doc={previewDoc}
         onOpenChange={(open) => !open && setPreviewDoc(null)}
+        allowDownload={false}
       />
     </div>
   );

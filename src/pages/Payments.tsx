@@ -33,6 +33,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  DocumentPreviewDialog,
+  type PreviewDocument,
+} from "@/components/DocumentPreviewDialog";
+import {
   fetchMyFeeStructure,
   fetchMyExpenseClaims,
   submitMyExpenseClaim,
@@ -202,6 +206,7 @@ export default function Payments() {
     relatedMeetingLabel: "",
   });
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<PreviewDocument | null>(null);
 
   const resetForm = () => {
     setForm({
@@ -375,15 +380,19 @@ export default function Payments() {
                             </div>
                           )}
                           {c.receiptUrl && (
-                            <a
-                              href={resolveBoardFileUrl(c.receiptUrl)}
-                              target="_blank"
-                              rel="noreferrer"
+                            <button
+                              type="button"
                               className="mt-0.5 flex items-center gap-1 text-xs text-primary hover:underline"
+                              onClick={() =>
+                                setPreviewDoc({
+                                  url: resolveBoardFileUrl(c.receiptUrl)!,
+                                  name: c.receiptName || "Receipt",
+                                })
+                              }
                             >
                               <Paperclip className="h-3 w-3" />{" "}
                               {c.receiptName || "Receipt"}
-                            </a>
+                            </button>
                           )}
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
@@ -627,6 +636,11 @@ export default function Payments() {
           </form>
         </DialogContent>
       </Dialog>
+      <DocumentPreviewDialog
+        doc={previewDoc}
+        onOpenChange={(open) => !open && setPreviewDoc(null)}
+        allowDownload={false}
+      />
     </div>
   );
 }

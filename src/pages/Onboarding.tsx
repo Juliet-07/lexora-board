@@ -25,6 +25,10 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import {
+  DocumentPreviewDialog,
+  type PreviewDocument,
+} from "@/components/DocumentPreviewDialog";
+import {
   fetchMyOnboarding,
   fetchMyProfile,
   submitFitProper,
@@ -523,6 +527,7 @@ export default function Onboarding() {
   const [viewingDoc, setViewingDoc] = useState<
     (typeof signDocuments)[number] | null
   >(null);
+  const [previewDoc, setPreviewDoc] = useState<PreviewDocument | null>(null);
   const [holdsDirs, setHoldsDirs] = useState(true);
   const [currentDirs, setCurrentDirs] = useState<Directorship[]>([
     { company: "", position: "", detail: "" },
@@ -976,14 +981,18 @@ export default function Onboarding() {
                         {d.fileUrl ? (
                           <>
                             {" · "}
-                            <a
-                              href={resolveBoardFileUrl(d.fileUrl)}
-                              target="_blank"
-                              rel="noreferrer"
+                            <button
+                              type="button"
                               className="text-primary underline"
+                              onClick={() =>
+                                setPreviewDoc({
+                                  url: resolveBoardFileUrl(d.fileUrl)!,
+                                  name: d.title,
+                                })
+                              }
                             >
                               View document
-                            </a>
+                            </button>
                           </>
                         ) : d.body ? (
                           <>
@@ -1153,14 +1162,18 @@ export default function Onboarding() {
                         {m.resourceUrl && (
                           <>
                             {" · "}
-                            <a
-                              href={resolveBoardFileUrl(m.resourceUrl)}
-                              target="_blank"
-                              rel="noreferrer"
+                            <button
+                              type="button"
                               className="text-primary underline"
+                              onClick={() =>
+                                setPreviewDoc({
+                                  url: resolveBoardFileUrl(m.resourceUrl)!,
+                                  name: m.title,
+                                })
+                              }
                             >
                               Start module
-                            </a>
+                            </button>
                           </>
                         )}
                       </div>
@@ -1227,14 +1240,18 @@ export default function Onboarding() {
                     </div>
                     <div className="min-w-0 flex-1">
                       {item.fileUrl ? (
-                        <a
-                          href={resolveBoardFileUrl(item.fileUrl)}
-                          target="_blank"
-                          rel="noreferrer"
+                        <button
+                          type="button"
                           className="text-[13px] font-semibold text-primary underline"
+                          onClick={() =>
+                            setPreviewDoc({
+                              url: resolveBoardFileUrl(item.fileUrl)!,
+                              name: item.name,
+                            })
+                          }
                         >
                           {item.name}
-                        </a>
+                        </button>
                       ) : (
                         <b className="block text-[13px]">{item.name}</b>
                       )}
@@ -1333,6 +1350,12 @@ export default function Onboarding() {
           </div>
         </section>
       )}
+
+      <DocumentPreviewDialog
+        doc={previewDoc}
+        onOpenChange={(open) => !open && setPreviewDoc(null)}
+        allowDownload={false}
+      />
     </div>
   );
 }

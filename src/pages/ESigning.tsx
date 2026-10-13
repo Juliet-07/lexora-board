@@ -18,6 +18,10 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  DocumentPreviewDialog,
+  type PreviewDocument,
+} from "@/components/DocumentPreviewDialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -97,6 +101,7 @@ export default function ESigning() {
   const [confirmed, setConfirmed] = useState(false);
   const [fullName, setFullName] = useState("");
   const [notes, setNotes] = useState("");
+  const [previewDoc, setPreviewDoc] = useState<PreviewDocument | null>(null);
 
   const closeDialog = () => {
     setTarget(null);
@@ -312,14 +317,18 @@ export default function ESigning() {
                   >
                     <span>{ev.name}</span>
                     {ev.fileUrl && (
-                      <a
-                        href={resolveBoardFileUrl(ev.fileUrl)}
-                        target="_blank"
-                        rel="noreferrer"
+                      <button
+                        type="button"
                         className="text-primary underline"
+                        onClick={() =>
+                          setPreviewDoc({
+                            url: resolveBoardFileUrl(ev.fileUrl)!,
+                            name: ev.name,
+                          })
+                        }
                       >
                         View
-                      </a>
+                      </button>
                     )}
                   </div>
                 ))}
@@ -391,6 +400,12 @@ export default function ESigning() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DocumentPreviewDialog
+        doc={previewDoc}
+        onOpenChange={(open) => !open && setPreviewDoc(null)}
+        allowDownload={false}
+      />
     </div>
   );
 }

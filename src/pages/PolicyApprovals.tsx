@@ -33,15 +33,21 @@ import {
   type PendingPolicyApproval,
   type PendingPolicyAcknowledgement,
 } from "@/lib/board-api";
+import {
+  DocumentPreviewDialog,
+  type PreviewDocument,
+} from "@/components/DocumentPreviewDialog";
 
 function PolicyContentPreview({
   item,
+  onPreview,
 }: {
   item: {
     sections: { id: string; title: string; content: string }[];
     fileUrl: string | null;
     fileName: string;
   };
+  onPreview: (doc: PreviewDocument) => void;
 }) {
   if (item.sections.length > 0) {
     return (
@@ -63,15 +69,18 @@ function PolicyContentPreview({
   }
   if (item.fileUrl) {
     return (
-      <Button size="sm" variant="outline" asChild>
-        <a
-          href={resolveBoardFileUrl(item.fileUrl)}
-          target="_blank"
-          rel="noreferrer"
-        >
-          <FileText className="mr-1 h-4 w-4" />
-          View {item.fileName || "document"}
-        </a>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() =>
+          onPreview({
+            url: resolveBoardFileUrl(item.fileUrl)!,
+            name: item.fileName || "document",
+          })
+        }
+      >
+        <FileText className="mr-1 h-4 w-4" />
+        View {item.fileName || "document"}
       </Button>
     );
   }
@@ -319,6 +328,7 @@ function PolicyApprovalRow({
 }) {
   const [notes, setNotes] = useState("");
   const [open, setOpen] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState<PreviewDocument | null>(null);
 
   const decideMut = useMutation({
     mutationFn: (decision: "Approved" | "Rejected") =>
@@ -368,7 +378,7 @@ function PolicyApprovalRow({
                 {policy.description}
               </p>
             )}
-            <PolicyContentPreview item={policy} />
+            <PolicyContentPreview item={policy} onPreview={setPreviewDoc} />
             <div>
               <Textarea
                 rows={2}
@@ -397,6 +407,11 @@ function PolicyApprovalRow({
           </div>
         </DialogContent>
       </Dialog>
+      <DocumentPreviewDialog
+        doc={previewDoc}
+        onOpenChange={(open) => !open && setPreviewDoc(null)}
+        allowDownload={false}
+      />
     </div>
   );
 }
@@ -412,6 +427,7 @@ function PolicyAckRow({
 }) {
   const [open, setOpen] = useState(false);
   const [signature, setSignature] = useState("");
+  const [previewDoc, setPreviewDoc] = useState<PreviewDocument | null>(null);
 
   const ackMut = useMutation({
     mutationFn: () => acknowledgeMyPolicy(policy.id, signature),
@@ -454,7 +470,7 @@ function PolicyAckRow({
                 {policy.description}
               </p>
             )}
-            <PolicyContentPreview item={policy} />
+            <PolicyContentPreview item={policy} onPreview={setPreviewDoc} />
             <div>
               <label
                 className={cn(
@@ -482,6 +498,11 @@ function PolicyAckRow({
           </div>
         </DialogContent>
       </Dialog>
+      <DocumentPreviewDialog
+        doc={previewDoc}
+        onOpenChange={(open) => !open && setPreviewDoc(null)}
+        allowDownload={false}
+      />
     </div>
   );
 }
