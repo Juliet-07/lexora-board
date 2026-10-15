@@ -998,12 +998,18 @@ export interface DirectoryEntry {
   role: string;
   email: string;
   bio: string;
-  appointedAt: string;
-  termEnds: string;
+  appointedAt: string | null;
+  termEnds: string | null;
   lifecycleStatus: BoardMemberLifecycleStatus;
-  attendancePercentage: number;
+  attendancePercentage: number | null;
   committees: string[];
   isYou: boolean;
+  // True for the synthetic "Account Owner" row representing the
+  // tenant itself (Oct 2026: "the tenant owner should be listed as
+  // part of the board directory so that they can be messaged") — its
+  // id is wire-prefixed `tenant:<id>` rather than a real BoardMember
+  // id, see board-messaging.service.ts on the backend.
+  isTenant?: boolean;
 }
 
 export const fetchDirectory = async (): Promise<DirectoryEntry[]> => {

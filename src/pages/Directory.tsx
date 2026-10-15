@@ -81,6 +81,11 @@ export default function Directory() {
                             You
                           </Badge>
                         )}
+                        {d.isTenant && (
+                          <Badge variant="outline" className="font-normal">
+                            Account Owner
+                          </Badge>
+                        )}
                       </span>
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-muted-foreground">
