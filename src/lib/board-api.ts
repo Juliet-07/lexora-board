@@ -338,6 +338,39 @@ export const decideGovernanceCode = async (
   return unwrap(res);
 };
 
+// The board's own read-only library — every Published code for this
+// director's tenant, not just the ones they were personally asked to
+// approve (Oct 2026: "after a governance code is approved by board
+// and published, the board member should be able to see the
+// governance codes that are published"). documents[] is the file
+// attachment(s) — view the same way Document Vault does, via
+// DocumentPreviewDialog with allowDownload={false}.
+export interface PublishedGovernanceCodeDocument {
+  name: string;
+  fileUrl: string | null;
+  mimeType: string | null;
+  size: number;
+  uploadedAt: string;
+}
+
+export interface PublishedGovernanceCode {
+  id: string;
+  title: string;
+  category: string;
+  version: number;
+  body: string;
+  documents: PublishedGovernanceCodeDocument[];
+  updatedAt: string;
+}
+
+export const fetchPublishedGovernanceCodes = async (): Promise<
+  PublishedGovernanceCode[]
+> => {
+  const res = await api.get("/board-portal/governance-codes/published");
+  const d = unwrap(res);
+  return Array.isArray(d) ? d : [];
+};
+
 // ══════════════════════════════════════════════════════════════
 // ESG disclosure approvals — two separate board-portal dockets, one
 // per role in the two-party approval chain (board.controller.ts
