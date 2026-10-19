@@ -1687,3 +1687,55 @@ export const fetchMyNewsletter = async (id: string): Promise<MyNewsletter> => {
   const res = await api.get(`/board-portal/newsletters/${id}`);
   return unwrap(res);
 };
+
+// ══════════════════════════════════════════════════════════════
+// Events — in-house events this board member is invited to. Per
+// event.controller.ts's BoardPortalEventController. Sanitized
+// portal shape (EventService#sanitizeForPortal): only this board
+// member's own `myStatus`, never the rest of the guest list.
+// Acknowledging here IS the real attendance record — there is no
+// separate manual "check in" step anywhere in this flow.
+// ══════════════════════════════════════════════════════════════
+
+export type MyEventType =
+  | "Webinar"
+  | "Conference"
+  | "Workshop"
+  | "Networking"
+  | "Client briefing";
+export type MyEventStatus = "Draft" | "Published" | "Completed" | "Cancelled";
+export type MyEventInviteStatus =
+  | "Invited"
+  | "Registered"
+  | "Acknowledged"
+  | "Declined";
+
+export interface MyPortalEvent {
+  _id: string;
+  title: string;
+  type: MyEventType;
+  status: MyEventStatus;
+  description: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  location: string;
+  virtual: boolean;
+  meetingLink: string;
+  host: string;
+  agenda: string;
+  myStatus: MyEventInviteStatus | null;
+}
+
+export const fetchMyEvents = async (): Promise<MyPortalEvent[]> => {
+  const res = await api.get("/board-portal/events");
+  const d = unwrap(res);
+  return Array.isArray(d) ? d : [];
+};
+
+export const acknowledgeMyEvent = async (
+  id: string,
+): Promise<{ acknowledged: boolean }> => {
+  const res = await api.post(`/board-portal/events/${id}/acknowledge`);
+  return unwrap(res);
+};

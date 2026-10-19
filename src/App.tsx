@@ -36,6 +36,7 @@ import ESigning from "@/pages/ESigning";
 import Vault from "@/pages/Vault";
 import Payments from "@/pages/Payments";
 import Newsletters from "@/pages/Newsletters";
+import Events from "@/pages/Events";
 import Notifications from "@/pages/Notifications";
 import Messages from "@/pages/Messages";
 import SettingsPage from "@/pages/Settings";
@@ -108,6 +109,7 @@ const BUILT_ROUTES = [
   "/vault",
   "/payments",
   "/newsletters",
+  "/events",
   "/notifications",
   "/messages",
   "/settings",
@@ -169,6 +171,7 @@ const App = () => (
               <Route path="/payments" element={<Payments />} />
               <Route path="/skills-matrix" element={<SkillsMatrix />} />
               <Route path="/newsletters" element={<Newsletters />} />
+              <Route path="/events" element={<Events />} />
               <Route path="/notifications" element={<Notifications />} />
               <Route path="/messages" element={<Messages />} />
               <Route path="/settings" element={<SettingsPage />} />

@@ -57,6 +57,7 @@ export const NAV_ITEMS: PortalNavItem[] = [
   { title: "Training & CPD", url: "/training", icon: GraduationCap },
   { title: "Payments", url: "/payments", icon: Wallet },
   { title: "Newsletters", url: "/newsletters", icon: Newspaper },
+  { title: "Events", url: "/events", icon: CalendarDays },
   {
     title: "Messages",
     url: "/messages",
