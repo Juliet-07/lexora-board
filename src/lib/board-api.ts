@@ -1728,6 +1728,13 @@ export interface MyPortalEvent {
   timezone?: string;
   inviteMessage?: string;
   inviteImageUrl?: string;
+  documents?: {
+    id: string;
+    name: string;
+    description?: string;
+    url: string;
+    size?: number;
+  }[];
   myStatus: MyEventInviteStatus | null;
   myRespondedAt?: string | null;
 }
