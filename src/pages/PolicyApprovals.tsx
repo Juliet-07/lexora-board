@@ -10,6 +10,7 @@ import {
   PenLine,
   ClipboardCheck,
   ShieldCheck,
+  Eye,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -88,6 +89,60 @@ function PolicyContentPreview({
     <p className="text-sm text-muted-foreground">
       No content attached to this policy yet.
     </p>
+  );
+}
+
+// A read-only look at a policy the director has already dealt with — one they
+// acknowledged, or approved — so the wording can be checked again later.
+function PolicyViewButton({
+  policy,
+  note,
+}: {
+  policy: {
+    title: string;
+    category: string;
+    version: string;
+    description: string;
+    sections: { id: string; title: string; content: string }[];
+    fileUrl: string | null;
+    fileName: string;
+  };
+  /** Shown under the title, e.g. "Acknowledged 3 Nov 2026". */
+  note?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState<PreviewDocument | null>(null);
+  return (
+    <>
+      <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
+        <Eye className="mr-1 h-4 w-4" />
+        View
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{policy.title}</DialogTitle>
+            <p className="text-xs text-muted-foreground">
+              {policy.category} · {policy.version}
+              {note ? ` · ${note}` : ""}
+            </p>
+          </DialogHeader>
+          <div className="space-y-4">
+            {policy.description && (
+              <p className="text-sm text-muted-foreground">
+                {policy.description}
+              </p>
+            )}
+            <PolicyContentPreview item={policy} onPreview={setPreviewDoc} />
+          </div>
+        </DialogContent>
+      </Dialog>
+      <DocumentPreviewDialog
+        doc={previewDoc}
+        onOpenChange={(o) => !o && setPreviewDoc(null)}
+        allowDownload={false}
+      />
+    </>
   );
 }
 
@@ -248,6 +303,14 @@ export default function PolicyApprovals() {
                         )}
                         {p.myDecision}
                       </Badge>
+                      <PolicyViewButton
+                        policy={p}
+                        note={
+                          p.myDecidedAt
+                            ? `${p.myDecision} ${new Date(p.myDecidedAt).toLocaleDateString()}`
+                            : (p.myDecision ?? undefined)
+                        }
+                      />
                     </div>
                   ))}
                 </CardContent>
@@ -305,6 +368,14 @@ export default function PolicyApprovals() {
                         <CheckCircle2 className="mr-1 h-3 w-3" />
                         Acknowledged
                       </Badge>
+                      <PolicyViewButton
+                        policy={p}
+                        note={
+                          p.ackedAt
+                            ? `Acknowledged ${new Date(p.ackedAt).toLocaleDateString()}`
+                            : undefined
+                        }
+                      />
                     </div>
                   ))}
                 </CardContent>
