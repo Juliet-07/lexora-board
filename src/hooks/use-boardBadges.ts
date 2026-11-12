@@ -2,6 +2,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   fetchUnreadNotificationCount,
   fetchMessageThreads,
+  fetchEsgReports,
+  fetchMyMeetings,
 } from "@/lib/board-api";
 import { useRealtimeEvent } from "@/lib/realtime-api";
 import {
@@ -32,8 +34,23 @@ export function useBoardBadges(): NavBadgeCounts {
     refetchInterval: 60_000,
   });
 
+  // Board Packs badge: published ESG reports not opened yet, plus
+  // meeting packs not yet fully read — the same two queries the page
+  // itself uses, so opening either clears its share of the count.
+  const { data: esgReports } = useQuery({
+    queryKey: ["board-esg-reports"],
+    queryFn: fetchEsgReports,
+    refetchInterval: 60_000,
+  });
+  const { data: meetings } = useQuery({
+    queryKey: ["board-my-meetings"],
+    queryFn: fetchMyMeetings,
+    refetchInterval: 60_000,
+  });
+
   useRealtimeEvent("notification:new", () => {
     queryClient.invalidateQueries({ queryKey: ["board-unread-count"] });
+    queryClient.invalidateQueries({ queryKey: ["board-esg-reports"] });
   });
   useRealtimeEvent("message:new", () => {
     queryClient.invalidateQueries({ queryKey: ["board-message-threads"] });
@@ -48,5 +65,10 @@ export function useBoardBadges(): NavBadgeCounts {
     ...mockBadges,
     notifications: unread?.count ?? 0,
     messages: unreadMessages,
+    boardPacks:
+      (esgReports ?? []).filter((r) => !r.readAt).length +
+      (meetings ?? []).filter(
+        (m) => m.boardPack.length > 0 && !m.myBoardPack.allDocumentsRead,
+      ).length,
   };
 }

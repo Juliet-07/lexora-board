@@ -44,7 +44,12 @@ export const NAV_ITEMS: PortalNavItem[] = [
   { title: "My Onboarding", url: "/onboarding", icon: Rocket },
   { title: "Board Calendar", url: "/calendar", icon: CalendarDays },
   { title: "Meetings", url: "/meetings", icon: Building2 },
-  { title: "Board Packs", url: "/board-packs", icon: Package },
+  {
+    title: "Board Packs",
+    url: "/board-packs",
+    icon: Package,
+    badge: "boardPacks",
+  },
   { title: "Resolutions", url: "/resolutions", icon: Vote },
   { title: "Policy Approvals", url: "/policy-approvals", icon: ShieldCheck },
   { title: "Governance Codes", url: "/governance-codes", icon: BookOpen },

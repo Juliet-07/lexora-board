@@ -735,6 +735,98 @@ export interface BoardPackNote {
   fromTenant: boolean;
 }
 
+// ══════════════════════════════════════════════════════════════
+// ESG reports published to the board — shown on the Board Packs page
+// (and emailed to every active board member at publish time).
+// ══════════════════════════════════════════════════════════════
+
+export interface EsgReportTotals {
+  total: number;
+  applicable: number;
+  notApplicable: number;
+  signedOff: number;
+  pending: number;
+  pct: number;
+}
+
+export interface EsgReportSummary {
+  _id: string;
+  title: string;
+  period: string;
+  frameworkLabel: string;
+  publishedAt: string | null;
+  publishedBy: string;
+  message: string;
+  totals: EsgReportTotals | null;
+  readAt: string | null;
+}
+
+export interface EsgReportIndicator {
+  code: string;
+  title: string;
+  owner: string;
+  requirement: string;
+  response: string;
+  status: string;
+  isApplicable: boolean;
+  applicabilityNote: string;
+  evidence: string[];
+  signedOffBy: string | null;
+  signedOffAt: string | null;
+  esgChairName: string;
+  esgChairDecidedAt: string | null;
+  boardChairName: string;
+  boardChairDecidedAt: string | null;
+}
+
+export interface EsgReportFull extends EsgReportSummary {
+  snapshot: {
+    businessName: string;
+    frameworkLabel: string;
+    frameworkDescription: string;
+    builtAt: string;
+    totals: EsgReportTotals;
+    indicators: EsgReportIndicator[];
+  };
+}
+
+export const fetchEsgReports = async (): Promise<EsgReportSummary[]> => {
+  const res = await api.get("/board-portal/esg-reports");
+  const d = unwrap(res);
+  return Array.isArray(d) ? d : [];
+};
+
+export const fetchEsgReport = async (id: string): Promise<EsgReportFull> => {
+  const res = await api.get(`/board-portal/esg-reports/${id}`);
+  return unwrap(res);
+};
+
+export const markEsgReportRead = async (
+  id: string,
+): Promise<{ readAt: string | null }> => {
+  const res = await api.post(`/board-portal/esg-reports/${id}/read`);
+  return unwrap(res);
+};
+
+export const downloadEsgReportPdf = async (
+  id: string,
+  filename: string,
+): Promise<void> => {
+  const res = await api.get(`/board-portal/esg-reports/${id}/pdf`, {
+    responseType: "blob",
+  });
+  const url = window.URL.createObjectURL(
+    new Blob([res.data], { type: "application/pdf" }),
+  );
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+};
+
 export const fetchMyMeetings = async (): Promise<MyMeeting[]> => {
   const res = await api.get("/board-portal/meetings");
   const d = unwrap(res);

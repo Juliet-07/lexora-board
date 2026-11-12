@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -22,12 +23,14 @@ import { cn } from "@/lib/utils";
 import {
   addBoardPackNote,
   confirmBoardPackRead,
+  fetchEsgReports,
   fetchMyMeetings,
   resolveBoardFileUrl,
   toggleBoardPackRead,
   type MyMeeting,
   type MyMeetingBoardPackDoc,
 } from "@/lib/board-api";
+import { EsgReportDetail, EsgReportList } from "@/components/EsgReportPack";
 
 // Real board packs, drawn from the same meetings this director already
 // sees on "My Meetings" — any meeting the tenant has attached board
@@ -57,6 +60,15 @@ export default function BoardPacks() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [openThread, setOpenThread] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
+  // ?report=<id> opens a published ESG report — it's the link in the
+  // email the tenant's publish sends, and in the portal notification.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const esgReportId = searchParams.get("report");
+
+  const { data: esgReports = [], isLoading: esgLoading } = useQuery({
+    queryKey: ["board-esg-reports"],
+    queryFn: fetchEsgReports,
+  });
 
   const { data: meetings = [], isLoading } = useQuery({
     queryKey: ["board-my-meetings"],
@@ -118,7 +130,16 @@ export default function BoardPacks() {
     noteMut.mutate({ fileUrl, text: noteDraft.trim() });
   };
 
-  if (isLoading) {
+  if (esgReportId) {
+    return (
+      <EsgReportDetail
+        id={esgReportId}
+        onBack={() => setSearchParams({}, { replace: true })}
+      />
+    );
+  }
+
+  if (isLoading || esgLoading) {
     return (
       <div className="flex items-center justify-center gap-2 py-24 text-muted-foreground">
         <Loader2 className="h-5 w-5 animate-spin" />
@@ -138,11 +159,22 @@ export default function BoardPacks() {
           </p>
         </div>
 
-        {packs.length === 0 ? (
+        <EsgReportList
+          reports={esgReports}
+          onOpen={(id) => setSearchParams({ report: id })}
+        />
+
+        {esgReports.length > 0 && packs.length > 0 && (
+          <h2 className="text-sm font-semibold">Meeting packs</h2>
+        )}
+
+        {packs.length === 0 && esgReports.length > 0 ? null : packs.length ===
+          0 ? (
           <Card>
             <CardContent className="py-10 text-center text-sm text-muted-foreground">
               No board packs yet. You'll see a pack here as soon as the tenant
-              adds board pack documents to a meeting you're invited to.
+              publishes an ESG report or adds board pack documents to a meeting
+              you're invited to.
             </CardContent>
           </Card>
         ) : (
